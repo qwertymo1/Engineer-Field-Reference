@@ -1,4 +1,4 @@
-/* build 203f1d82d2 */
+/* build 0b8a649bdf */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -50,6 +50,29 @@ function crumb(parts){crumbEl.innerHTML='';
  if(i){const s=document.createElement('span');s.className='sep';s.textContent='›';crumbEl.appendChild(s);}
  if(p.fn){const a=document.createElement('a');a.textContent=p.label;a.onclick=p.fn;crumbEl.appendChild(a);}
  else{const s=document.createElement('span');s.className='here';s.textContent=p.label;crumbEl.appendChild(s);}});}
+const EQUIP={
+ dozer:{name:'Dozer (crawler, earthmoving)',
+  note:'Production = maximum production × the product of the correction factors. Read the maximum production for your dozer and push distance from the chart in TM 3-34.62 (Fig 2-13 / 2-14) and enter it below.',
+  fields:[{k:'max',l:'Max production (LCY/hr) — Fig 2-13/2-14'},{k:'grade',l:'Grade factor (Fig 2-15; 1.0 = level)',v:1}],
+  selects:[
+   {k:'mat',l:'Material (Table 2-4)',opts:[['Average / as-is (1.0)',1],['Loose, stockpile (1.2)',1.2],['Hard to cut; frozen, w/ tilt (0.8)',0.8],['Hard to cut; frozen, no tilt (0.7)',0.7],['Hard to drift / dead / sticky (0.8)',0.8],['Rock, ripped or blasted (0.7)',0.7]]},
+   {k:'tech',l:'Technique (Table 2-5)',opts:[['Normal (1.0)',1],['Slot dozing (1.2)',1.2],['Side-by-side dozing (1.2)',1.2]]},
+   {k:'op',l:'Operator (Table 2-2)',opts:[['Excellent — day (1.0)',1],['Average — day (0.75)',0.75],['Poor — day (0.6)',0.6],['Excellent — night (0.75)',0.75],['Average — night (0.56)',0.56],['Poor — night (0.45)',0.45]]}],
+  eff:true,
+  calc:o=>{const p=o.max*o.grade*o.mat*o.tech*o.op*(o.wm/60);return [['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}},
+ loader:{name:'Wheel loader',
+  note:'Production = heaped-bucket capacity × fill factor × (60 ÷ cycle time) × efficiency. Fill factor from TM 3-34.62 Table 5-1; typical cycle time 0.45–0.55 min (Table 5-2).',
+  fields:[{k:'cap',l:'Heaped bucket capacity (CY)'},{k:'ct',l:'Cycle time (min) — Table 5-2',v:0.5}],
+  selects:[{k:'ff',l:'Material fill factor (Table 5-1)',opts:[['Mixed moist aggregates (0.98)',0.98],['Uniform aggregate ≤ 1/8 in (0.98)',0.98],['Uniform 1/8–3/8 in (0.93)',0.93],['Uniform ≥ 1/2 in (0.88)',0.88],['Blasted rock — well (0.88)',0.88],['Blasted rock — average (0.83)',0.83],['Blasted rock — poor (0.68)',0.68],['Rock-dirt mixture (1.10)',1.1],['Moist loam (1.05)',1.05],['Soil (0.90)',0.9]]}],
+  eff:true,
+  calc:o=>{const p=o.cap*o.ff*(60/o.ct)*(o.wm/60);return [['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}},
+ hoe:{name:'Hydraulic excavator / backhoe',
+  note:'Production = heaped-bucket capacity × fill factor × (60 ÷ cycle time) × efficiency. Fill factor from TM 3-34.62 Table 8-1; enter a cycle time typical for your machine and depth of cut.',
+  fields:[{k:'cap',l:'Heaped bucket capacity (CY)'},{k:'ct',l:'Cycle time (min)',v:0.4}],
+  selects:[{k:'ff',l:'Material fill factor (Table 8-1)',opts:[['Moist loam / sandy clay (1.05)',1.05],['Sand and gravel (1.02)',1.02],['Hard, tough clay (0.85)',0.85],['Rock — well blasted (0.68)',0.68],['Rock — poorly blasted (0.45)',0.45]]}],
+  eff:true,
+  calc:o=>{const p=o.cap*o.ff*(60/o.ct)*(o.wm/60);return [['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}}
+};
 const TOOLS=[
  {cat:'Horizontal',name:'Earthwork volume (average end area)',src:'TM 3-34.55 / TM 3-34.62',
   note:'Average-end-area method. Enter the two cross-section end areas and the distance between the stations.',
@@ -59,10 +82,7 @@ const TOOLS=[
   note:'Convert in-place (bank) soil to loose and compacted volumes. Enter the swell and shrinkage percentages for your soil from the manual’s conversion-factor table.',
   in:[{k:'b',l:'Bank volume (BCY)'},{k:'sw',l:'Swell %'},{k:'sh',l:'Shrinkage %'}],
   out:o=>[['Loose (LCY)',fmt(o.b*(1+o.sw/100))],['Compacted (CCY)',fmt(o.b*(1-o.sh/100))]]},
- {cat:'Horizontal',name:'Equipment production rate',src:'TM 3-34.41',
-  note:'Volume moved per cycle × cycles per hour, adjusted for working efficiency (minutes actually worked in a 60-minute hour — use the manual’s job-efficiency guidance).',
-  in:[{k:'v',l:'Volume per cycle (LCY)'},{k:'ct',l:'Cycle time (min)'},{k:'wm',l:'Working min / hr',v:50}],
-  out:o=>[['Production',fmt(o.v*(o.wm/o.ct))+' LCY/hr'],['Per 8-hr day',fmt(o.v*(o.wm/o.ct)*8)+' LCY']]},
+ {cat:'Horizontal',name:'Equipment production rate',equip:EQUIP},
  {cat:'Vertical',name:'Concrete volume',src:'TM 3-34.44',
   note:'Length × width × thickness ÷ 27, plus a waste allowance. Length and width in feet, thickness in inches.',
   in:[{k:'L',l:'Length (ft)'},{k:'W',l:'Width (ft)'},{k:'T',l:'Thickness (in)'},{k:'wa',l:'Waste %',v:5}],
@@ -87,6 +107,19 @@ const TOOLS=[
 function fmt(n){return (!isFinite(n))?'—':(Math.round(n*100)/100).toLocaleString();}
 function toolCard(t){
  const d=document.createElement('details');d.className='card tool';d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':'#2f7d6b');
+ if(t.equip){
+  const keys=Object.keys(t.equip);
+  d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><label class="tin"><span>Equipment</span><select data-eq>${keys.map(k=>`<option value="${k}">${esc(t.equip[k].name)}</option>`).join('')}</select></label><div class="eqbody"></div></div>`;
+  const sel=d.querySelector('[data-eq]'),body=d.querySelector('.eqbody');
+  function calc(){const e=t.equip[sel.value],o={};body.querySelectorAll('[data-k]').forEach(x=>o[x.dataset.k]=parseFloat(x.value));let rows;try{rows=e.calc(o)||[];}catch(err){rows=[];}const outs=body.querySelector('.touts');if(outs)outs.innerHTML=rows.map(r=>`<div class="tout"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
+  function buildEq(){const e=t.equip[sel.value];
+   const flds=(e.fields||[]).map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${f.v!=null?f.v:''}"></label>`).join('');
+   const sels=(e.selects||[]).map(s=>`<label class="tin"><span>${esc(s.l)}</span><select data-k="${s.k}">${s.opts.map(o=>`<option value="${o[1]}">${esc(o[0])}</option>`).join('')}</select></label>`).join('');
+   const ef=e.eff?`<label class="tin"><span>Working min / hr</span><input type="number" inputmode="decimal" step="any" data-k="wm" value="50"></label>`:'';
+   body.innerHTML=`<p class="tnote">${esc(e.note)}</p><div class="tins">${flds}${sels}${ef}</div><div class="touts"></div><div class="src">Source: TM 3-34.62 (Earthmoving)</div>`;calc();}
+  sel.addEventListener('change',buildEq);d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)buildEq();});
+  return d;
+ }
  const ins=t.in.map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${f.v!=null?f.v:''}"></label>`).join('');
  d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p><div class="tins">${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
  const outs=d.querySelector('.touts');
