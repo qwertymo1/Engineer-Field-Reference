@@ -139,8 +139,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .card[open] .car{transform:rotate(90deg)}
 .card .star{flex:none;border:0;background:none;color:var(--line);font-size:22px;line-height:1;cursor:pointer;padding:0 2px;margin-top:-1px}
 .card .star.on{color:#d9a521}
-.shortcuts{display:flex;gap:9px;margin-bottom:11px}
-.scut{flex:1;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--dc);
+.shortcuts{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:11px}
+.scut{flex:1 1 40%;min-width:118px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--dc);
  border-radius:11px;padding:12px 13px;cursor:pointer;color:var(--fg);font:inherit;box-shadow:var(--shadow)}
 .scut .si{font-size:19px;color:var(--dc)}
 .scut .sl{font-weight:800;font-size:15px}
@@ -153,6 +153,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .bbtns .copy{padding:9px 14px;font-size:13px}
 .bsta{font-size:12.5px;font-weight:700;min-height:16px;margin:6px 0 0}
 .bsta.ok{color:var(--accent-ink)}.bsta.err{color:var(--warn)}
+.oprog{display:flex;align-items:center;gap:10px;margin:4px 0 13px}
+.obar{flex:1;height:11px;background:var(--surface2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.obar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.opct{font-size:12px;font-weight:800;color:var(--accent-ink);min-width:40px;text-align:right}
+.obtn{width:100%;background:var(--accent);color:var(--onacc);border:0;border-radius:10px;padding:13px;font:inherit;font-weight:800;font-size:15px;cursor:pointer}
+.obtn:disabled{opacity:.6}
 .body{padding:0 13px 13px;border-top:1px solid var(--line)}
 .lead{margin:11px 0 4px;font-size:14px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 11px;margin-top:7px}
@@ -249,6 +255,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   </div>
  </div>
 </div>
+<div class="sheet" id="osheet" role="dialog" aria-modal="true" hidden>
+ <div class="sheetcard">
+  <div class="sheethd"><b>Offline use</b><button id="oclose" aria-label="Close">&times;</button></div>
+  <div class="sheetbody">
+   <p class="bnote">Download every figure and table now so the whole app works with no signal in the field. The full set is about 70&nbsp;MB &mdash; do this on wifi. You only need to do it once per device (and again after a big update). For launching with no signal, also add the app to your home screen.</p>
+   <div id="oprog" class="oprog" hidden><div class="obar"><i id="obarfill"></i></div><span id="opct" class="opct">0%</span></div>
+   <button id="odl" class="obtn">Download all for offline</button>
+   <p id="osta" class="bsta" role="status"></p>
+  </div>
+ </div>
+</div>
 <div class="sheet center" id="leave" role="dialog" aria-modal="true" aria-labelledby="leavet" hidden>
  <div class="modal">
   <b id="leavet">Leave the app?</b>
@@ -264,7 +281,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div>
 <script>
 (function(){
- var V='d63494ac1d';
+ var V='68bd96d740';
  fetch('content.json?v='+V,{cache:'no-cache'}).then(function(r){return r.json();}).then(function(d){
    window.__DATA__=d;
    var b=document.getElementById('boot'); if(b) b.remove();

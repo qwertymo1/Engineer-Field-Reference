@@ -1,4 +1,4 @@
-/* build d63494ac1d */
+/* build 68bd96d740 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -170,6 +170,7 @@ function render(){
     if(fav.size){const b=document.createElement('button');b.className='scut';b.style.setProperty('--dc','#c9a227');b.innerHTML=`<span class="si">&#9733;</span><span class="sl">Saved</span><span class="sn">${fav.size}</span>`;b.onclick=()=>goSpecial('saved');sc.appendChild(b);}
     if(recent.length){const b=document.createElement('button');b.className='scut';b.style.setProperty('--dc','#6a6a5a');b.innerHTML=`<span class="si">&#8635;</span><span class="sl">Recent</span><span class="sn">${recent.length}</span>`;b.onclick=()=>goSpecial('recent');sc.appendChild(b);}
     const bb=document.createElement('button');bb.className='scut';bb.style.setProperty('--dc','#5a7d5a');bb.innerHTML=`<span class="si">&#128190;</span><span class="sl">Backup</span><span class="sn">&rsaquo;</span>`;bb.onclick=openBackup;sc.appendChild(bb);
+    const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Offline</span><span class="sn">&rsaquo;</span>`;ob.onclick=openOffline;sc.appendChild(ob);
     frag.appendChild(sc);
    }
    const h=document.createElement('div');h.className='idxhead';h.textContent='Choose a discipline:';h.style.marginTop='4px';frag.appendChild(h);
@@ -237,6 +238,18 @@ $('#csheet').addEventListener('click',e=>{if(e.target.id==='csheet')$('#csheet')
 $('#ccopy').onclick=async()=>{const em='Dylan.W.Lundquist.Mil@army.mil';try{await navigator.clipboard.writeText(em);$('#ccopy').textContent='Copied';setTimeout(()=>$('#ccopy').textContent='Copy',1500);}catch(e){const r=document.createRange();r.selectNodeContents($('.cmail a'));const s=getSelection();s.removeAllRanges();s.addRange(r);}};
 function setBsta(msg,ok){const el=$('#bsta');el.textContent=msg||'';el.className='bsta'+(msg?(ok?' ok':' err'):'');}
 function openBackup(){$('#csheet').hidden=true;try{$('#bcode').value=makeBackup();}catch(e){$('#bcode').value='';}$('#brest').value='';setBsta('');$('#bsheet').hidden=false;guard();}
+function setOsta(m,ok){const el=$('#osta');el.textContent=m||'';el.className='bsta'+(m?(ok?' ok':' err'):'');}
+function openOffline(){$('#csheet').hidden=true;const o=lsGet('efr-offline',null);setOsta(o?('All '+o.n+' figures & tables saved for offline use ✓'):'',true);$('#odl').textContent=o?'Refresh offline copy':'Download all for offline';$('#oprog').hidden=true;$('#obarfill').style.width='0%';$('#opct').textContent='0%';$('#osheet').hidden=false;guard();}
+$('#oclose').onclick=()=>{$('#osheet').hidden=true;};
+$('#osheet').addEventListener('click',e=>{if(e.target.id==='osheet')$('#osheet').hidden=true;});
+$('#odl').onclick=async()=>{const b=$('#odl');b.disabled=true;$('#oprog').hidden=false;setOsta('');
+ const urls=Object.values(DATA.images),total=urls.length;let done=0,i=0,cache=null;
+ try{cache=await caches.open('efr-images-v1');}catch(e){}
+ const upd=()=>{const p=total?Math.round(done/total*100):100;$('#obarfill').style.width=p+'%';$('#opct').textContent=p+'%';};
+ async function worker(){while(i<urls.length){const u=urls[i++];try{if(cache){const hit=await cache.match(u);if(!hit){const r=await fetch(u,{cache:'reload'});if(r&&r.ok)await cache.put(u,r.clone());}}else{await fetch(u);}}catch(e){}done++;upd();}}
+ try{await Promise.all([0,0,0,0,0,0].map(worker));lsSet('efr-offline',{n:total,ts:Date.now()});setOsta('All '+total+' figures & tables saved for offline use ✓',true);b.textContent='Refresh offline copy';}
+ catch(e){setOsta('Download interrupted — tap again to resume.',false);}
+ b.disabled=false;};
 $('#bclose').onclick=()=>{$('#bsheet').hidden=true;};
 $('#bsheet').addEventListener('click',e=>{if(e.target.id==='bsheet')$('#bsheet').hidden=true;});
 $('#bcopy').onclick=async()=>{const t=$('#bcode');try{await navigator.clipboard.writeText(t.value);$('#bcopy').textContent='Copied';setTimeout(()=>$('#bcopy').textContent='Copy code',1500);}catch(e){t.focus();t.select();try{document.execCommand('copy');$('#bcopy').textContent='Copied';setTimeout(()=>$('#bcopy').textContent='Copy code',1500);}catch(_){}}};
@@ -253,6 +266,7 @@ window.addEventListener('popstate',()=>{
  if(_leaving)return;
  if(!$('#leave').hidden){$('#leave').hidden=true;guard();return;}            // dismiss leave dialog = stay
  if($('#viewer').classList.contains('on')){$('#viewer').classList.remove('on');$('#vimg').src='';guard();return;}
+ if(!$('#osheet').hidden){$('#osheet').hidden=true;guard();return;}
  if(!$('#bsheet').hidden){$('#bsheet').hidden=true;guard();return;}
  if(!$('#csheet').hidden){$('#csheet').hidden=true;guard();return;}
  if(special||disc||man){upLevel();guard();return;}                           // step up inside the app
