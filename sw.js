@@ -1,8 +1,8 @@
-/* Engineer Field Reference service worker - build 68bd96d740 */
-const VER='68bd96d740';
+/* Engineer Field Reference service worker - build b614db417f */
+const VER='b614db417f';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
-const CORE=["./", "index.html", "app.js?v=68bd96d740", "content.json?v=68bd96d740", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const CORE=["./", "index.html", "app.js", "content.json", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(SHELL).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
 });
@@ -28,16 +28,19 @@ self.addEventListener('fetch',e=>{
     }));
     return;
   }
-  // shell + content: network-first so updates land fast, fall back to cache offline
+  // navigations: network-first, fall back to the cached app shell when offline
+  if(req.mode==='navigate'){
+    e.respondWith((async()=>{
+      try{ const res=await fetch(req); if(res&&res.ok){const c=await caches.open(SHELL);c.put('index.html',res.clone());} return res; }
+      catch(err){ const c=await caches.open(SHELL); return (await c.match('index.html'))||(await c.match('./'))||Response.error(); }
+    })());
+    return;
+  }
+  // shell assets (app.js, content.json, manifest, icons): network-first, fall back to the
+  // SAME cached resource when offline -- never return the HTML shell for a script/json request
   e.respondWith((async()=>{
-    try{
-      const res=await fetch(req);
-      if(res&&res.ok){ const c=await caches.open(SHELL); c.put(req,res.clone()); }
-      return res;
-    }catch(err){
-      const c=await caches.open(SHELL);
-      const hit=await c.match(req) || await c.match('index.html') || await c.match('./');
-      return hit||Response.error();
-    }
+    const c=await caches.open(SHELL);
+    try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }
+    catch(err){ const hit=await c.match(req,{ignoreSearch:true}); return hit||Response.error(); }
   })());
 });

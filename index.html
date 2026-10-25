@@ -281,11 +281,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div>
 <script>
 (function(){
- var V='68bd96d740';
- fetch('content.json?v='+V,{cache:'no-cache'}).then(function(r){return r.json();}).then(function(d){
+ var V='b614db417f';
+ fetch('content.json').then(function(r){return r.json();}).then(function(d){
    window.__DATA__=d;
    var b=document.getElementById('boot'); if(b) b.remove();
-   var s=document.createElement('script'); s.src='app.js?v='+V; document.body.appendChild(s);
+   var s=document.createElement('script'); s.src='app.js'; document.body.appendChild(s);
  }).catch(function(e){
    var b=document.getElementById('boot');
    if(b) b.innerHTML='Could not load the guide. Check your connection and reopen the app.';
