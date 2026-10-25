@@ -1,4 +1,4 @@
-/* build 0672360ab5 */
+/* build d63494ac1d */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -53,7 +53,7 @@ function crumb(parts){crumbEl.innerHTML='';
 const EQUIP={
  dozer:{name:'Dozer',
   note:'Production = maximum production × the product of the correction factors. Tap a chart below to read the maximum production for your dozer and push distance, then enter it.',
-  links:[{k:'TM62 Figure 2-13',l:'Fig 2-13 (D6T–D7E)'},{k:'TM62 Figure 2-14',l:'Fig 2-14 (D7–D8)'},{k:'TM62 Figure 2-15',l:'Fig 2-15 grade'}],
+  links:[{k:'TM62 Figure 2-13',l:'Fig 2-13 (D6T–D7E)'},{k:'TM62 Figure 2-14',l:'Fig 2-14 (D7–D8)'},{k:'TM62 Figure 2-15',l:'Fig 2-15 grade'},{k:'TM62 Table 2-2',l:'Table 2-2 operator'},{k:'TM62 Table 2-4',l:'Table 2-4 material'},{k:'TM62 Table 2-5',l:'Table 2-5 technique'}],
   fields:[{k:'max',l:'Max production (LCY/hr) — from chart'},{k:'grade',l:'Grade factor (Fig 2-15; 1.0 = level)',v:1}],
   selects:[
    {k:'mat',l:'Material (Table 2-4)',opts:[['Average / as-is (1.0)',1],['Loose, stockpile (1.2)',1.2],['Hard to cut; frozen, w/ tilt (0.8)',0.8],['Hard to cut; frozen, no tilt (0.7)',0.7],['Hard to drift / dead / sticky (0.8)',0.8],['Rock, ripped or blasted (0.7)',0.7]]},
@@ -63,12 +63,14 @@ const EQUIP={
   calc:o=>{const p=o.max*o.grade*o.mat*o.tech*o.op*(o.wm/60);return [['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}},
  loader:{name:'Wheel loader',
   note:'Production = heaped-bucket capacity × fill factor × (60 ÷ cycle time) × efficiency. Fill factor from TM 3-34.62 Table 5-1; typical cycle time 0.45–0.55 min (Table 5-2).',
+  links:[{k:'TM62 Table 5-1',l:'Table 5-1 fill'},{k:'TM62 Table 5-2',l:'Table 5-2 cycle'}],
   fields:[{k:'cap',l:'Heaped bucket capacity (CY)'},{k:'ct',l:'Cycle time (min) — Table 5-2',v:0.5}],
   selects:[{k:'ff',l:'Material fill factor (Table 5-1)',opts:[['Mixed moist aggregates (0.98)',0.98],['Uniform aggregate ≤ 1/8 in (0.98)',0.98],['Uniform 1/8–3/8 in (0.93)',0.93],['Uniform ≥ 1/2 in (0.88)',0.88],['Blasted rock — well (0.88)',0.88],['Blasted rock — average (0.83)',0.83],['Blasted rock — poor (0.68)',0.68],['Rock-dirt mixture (1.10)',1.1],['Moist loam (1.05)',1.05],['Soil (0.90)',0.9]]}],
   eff:true,
   calc:o=>{const p=o.cap*o.ff*(60/o.ct)*(o.wm/60);return [['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}},
  hoe:{name:'Hydraulic excavator / backhoe',
   note:'Production = heaped-bucket capacity × fill factor × (60 ÷ cycle time) × efficiency. Fill factor from TM 3-34.62 Table 8-1; enter a cycle time typical for your machine and depth of cut.',
+  links:[{k:'TM62 Table 8-1',l:'Table 8-1 fill'}],
   fields:[{k:'cap',l:'Heaped bucket capacity (CY)'},{k:'ct',l:'Cycle time (min)',v:0.4}],
   selects:[{k:'ff',l:'Material fill factor (Table 8-1)',opts:[['Moist loam / sandy clay (1.05)',1.05],['Sand and gravel (1.02)',1.02],['Hard, tough clay (0.85)',0.85],['Rock — well blasted (0.68)',0.68],['Rock — poorly blasted (0.45)',0.45]]}],
   eff:true,
@@ -80,6 +82,7 @@ const EQUIP={
   calc:o=>{const ct=o.tt+o.td+o.lt,p=o.cap*(o.wm/ct);return [['Cycle time',fmt(ct)+' min'],['Production',fmt(p)+' LCY/hr'],['Per 8-hr day',fmt(p*8)+' LCY']];}},
  grader:{name:'Grader',
   note:'Hourly area A = speed × (effective blade length − overlap) × 5280 × efficiency (TM 3-34.62 para 4-34). Speed from Table 4-4, effective blade length from Table 4-5. “Finished area” divides the coverage by the number of passes.',
+  links:[{k:'TM62 Table 4-4',l:'Table 4-4 speed'},{k:'TM62 Table 4-5',l:'Table 4-5 blade'}],
   fields:[{k:'S',l:'Operating speed (mph) — Table 4-4'},{k:'Le',l:'Effective blade length (ft) — Table 4-5'},{k:'Lo',l:'Overlap (ft)',v:0},{k:'passes',l:'Passes',v:1}],
   eff:true,
   calc:o=>{const A=o.S*(o.Le-o.Lo)*5280*(o.wm/60),ac=A/43560;return [['Coverage',fmt(ac)+' acre/hr ('+fmt(A)+' sq ft/hr)'],['Finished area',fmt(ac/o.passes)+' acre/hr']];}}
@@ -89,8 +92,9 @@ const TOOLS=[
   note:'Average-end-area method. Enter the two cross-section end areas and the distance between the stations.',
   in:[{k:'a1',l:'End area A1 (sq ft)'},{k:'a2',l:'End area A2 (sq ft)'},{k:'L',l:'Distance between (ft)'}],
   out:o=>[['Volume',fmt(o.L*(o.a1+o.a2)/2/27)+' cu yd']]},
- {cat:'Horizontal',name:'Soil volume — swell & shrinkage',src:'TM 3-34.41',
-  note:'Convert in-place (bank) soil to loose and compacted volumes. Enter the swell and shrinkage percentages for your soil from the manual’s conversion-factor table.',
+ {cat:'Horizontal',name:'Soil volume — swell & shrinkage',src:'TM 3-34.41 / TM 3-34.62',
+  note:'Convert in-place (bank) soil to loose and compacted volumes. Enter the swell and shrinkage percentages for your soil — see TM 3-34.62 Table 1-1 for soil conversion factors.',
+  links:[{k:'TM62 Table 1-1',l:'Table 1-1 conversion'}],
   in:[{k:'b',l:'Bank volume (BCY)'},{k:'sw',l:'Swell %'},{k:'sh',l:'Shrinkage %'}],
   out:o=>[['Loose (LCY)',fmt(o.b*(1+o.sw/100))],['Compacted (CCY)',fmt(o.b*(1-o.sh/100))]]},
  {cat:'Horizontal',name:'Equipment production rate',equip:EQUIP},
@@ -134,7 +138,8 @@ function toolCard(t){
   return d;
  }
  const ins=t.in.map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${f.v!=null?f.v:''}"></label>`).join('');
- d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p><div class="tins">${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
+ const glk=(t.links||[]).map(x=>`<button type="button" class="ref chartlink" data-k="${esc(x.k)}" data-l="${esc(x.l)}">${esc(x.l)}</button>`).join('');
+ d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p>${glk?`<div class="chartlinks">${glk}</div>`:''}<div class="tins">${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
  const outs=d.querySelector('.touts');
  function calc(){const o={};d.querySelectorAll('input[data-k]').forEach(x=>o[x.dataset.k]=parseFloat(x.value));let rows;try{rows=t.out(o)||[];}catch(e){rows=[];}outs.innerHTML=rows.map(r=>`<div class="tout"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
  d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)calc();});

@@ -1,8 +1,8 @@
-/* Engineer Field Reference service worker - build 0672360ab5 */
-const VER='0672360ab5';
+/* Engineer Field Reference service worker - build d63494ac1d */
+const VER='d63494ac1d';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
-const CORE=["./", "index.html", "app.js?v=0672360ab5", "content.json?v=0672360ab5", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const CORE=["./", "index.html", "app.js?v=d63494ac1d", "content.json?v=d63494ac1d", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(SHELL).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
 });
