@@ -1,4 +1,4 @@
-/* build eb9570b95a */
+/* build 0672360ab5 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -18,7 +18,7 @@ try{const t=localStorage.getItem('efr-theme'); if(t)document.documentElement.set
 $('#theme').onclick=()=>{const d=document.documentElement; const cur=d.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'); const nx=cur==='dark'?'light':'dark'; d.setAttribute('data-theme',nx); try{localStorage.setItem('efr-theme',nx);}catch(e){}};
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function hay(o){return [o.n,o.c,o.desc,o.use,o.how,o.dim,o.eq,o.tm,o.pr,o.wn,o.src,o.sn].join(' ').toLowerCase();}
-function lnk(v,doc){if(!v)return '';let s=esc(v);return s.replace(/(Table|Figure)\s+([0-9A-Z]+-\d+)/g,(m,k,num)=>{const key=doc+' '+k+' '+num;return DATA.images[key]?`<a class="ref" data-k="${key}" data-l="${k+' '+num}">${m}</a>`:m;});}
+function lnk(v,doc){if(!v)return '';return esc(v).replace(/(Table|Figure)s?\s+([0-9A-Za-z]+-\d+)/gi,(m,k,num)=>{const kk=k.charAt(0).toUpperCase()+k.slice(1).toLowerCase(),nn=num.toUpperCase();const key=doc+' '+kk+' '+nn;return DATA.images[key]?`<a class="ref" data-k="${key}" data-l="${kk+' '+nn}">${m}</a>`:m;});}
 function viewer(imgKey,title){const im=DATA.images[imgKey];if(!im)return;$('#vimg').src=im;$('#vtitle').textContent=title||'';$('#viewer').classList.add('on');}
 $('#vclose').onclick=()=>{$('#viewer').classList.remove('on');$('#vimg').src='';};
 $('#viewer').addEventListener('click',e=>{if(e.target.id==='viewer'){$('#viewer').classList.remove('on');$('#vimg').src='';}});
@@ -38,7 +38,7 @@ function topicEl(t){const el=document.createElement('div');el.className='topic';
  const parts=[];if(t.desc)parts.push(t.desc);if(t.how&&t.how!==t.desc)parts.push(t.how);
  const kf=[t.dim,t.eq,t.pr,t.wn].filter(Boolean).join('; ');
  const tag=(q||special)?` <span class="seclab">${esc(t.sn)}</span>`:'';
- el.innerHTML=`<h3>${esc(t.n)}${tag}</h3>${t.use?`<div class="use">When / why: ${esc(t.use)}</div>`:''}<p>${lnk(parts.join(' '),t.doc)}</p>${kf?`<div class="kf"><b>Key facts:</b> ${lnk(kf,t.doc)}</div>`:''}<div class="src">Source: ${lnk(t.src,t.doc)}</div>`;
+ el.innerHTML=`<h3>${esc(t.n)}${tag}</h3>${t.use?`<div class="use">When / why: ${lnk(t.use,t.doc)}</div>`:''}<p>${lnk(parts.join(' '),t.doc)}</p>${kf?`<div class="kf"><b>Key facts:</b> ${lnk(kf,t.doc)}</div>`:''}<div class="src">Source: ${lnk(t.src,t.doc)}</div>`;
  return el;}
 function entryEl(t){return t.kind==='task'?taskCard(t):topicEl(t);}
 function go(d,m,s){special=null;disc=d;man=m;sec=s||'ALL';q='';$('#q').value='';$('#qx').style.display='none';saveLast();render();window.scrollTo(0,0);}
