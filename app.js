@@ -1,4 +1,4 @@
-/* build c1e71f9349 */
+/* build 203f1d82d2 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -50,6 +50,50 @@ function crumb(parts){crumbEl.innerHTML='';
  if(i){const s=document.createElement('span');s.className='sep';s.textContent='›';crumbEl.appendChild(s);}
  if(p.fn){const a=document.createElement('a');a.textContent=p.label;a.onclick=p.fn;crumbEl.appendChild(a);}
  else{const s=document.createElement('span');s.className='here';s.textContent=p.label;crumbEl.appendChild(s);}});}
+const TOOLS=[
+ {cat:'Horizontal',name:'Earthwork volume (average end area)',src:'TM 3-34.55 / TM 3-34.62',
+  note:'Average-end-area method. Enter the two cross-section end areas and the distance between the stations.',
+  in:[{k:'a1',l:'End area A1 (sq ft)'},{k:'a2',l:'End area A2 (sq ft)'},{k:'L',l:'Distance between (ft)'}],
+  out:o=>[['Volume',fmt(o.L*(o.a1+o.a2)/2/27)+' cu yd']]},
+ {cat:'Horizontal',name:'Soil volume — swell & shrinkage',src:'TM 3-34.41',
+  note:'Convert in-place (bank) soil to loose and compacted volumes. Enter the swell and shrinkage percentages for your soil from the manual’s conversion-factor table.',
+  in:[{k:'b',l:'Bank volume (BCY)'},{k:'sw',l:'Swell %'},{k:'sh',l:'Shrinkage %'}],
+  out:o=>[['Loose (LCY)',fmt(o.b*(1+o.sw/100))],['Compacted (CCY)',fmt(o.b*(1-o.sh/100))]]},
+ {cat:'Horizontal',name:'Equipment production rate',src:'TM 3-34.41',
+  note:'Volume moved per cycle × cycles per hour, adjusted for working efficiency (minutes actually worked in a 60-minute hour — use the manual’s job-efficiency guidance).',
+  in:[{k:'v',l:'Volume per cycle (LCY)'},{k:'ct',l:'Cycle time (min)'},{k:'wm',l:'Working min / hr',v:50}],
+  out:o=>[['Production',fmt(o.v*(o.wm/o.ct))+' LCY/hr'],['Per 8-hr day',fmt(o.v*(o.wm/o.ct)*8)+' LCY']]},
+ {cat:'Vertical',name:'Concrete volume',src:'TM 3-34.44',
+  note:'Length × width × thickness ÷ 27, plus a waste allowance. Length and width in feet, thickness in inches.',
+  in:[{k:'L',l:'Length (ft)'},{k:'W',l:'Width (ft)'},{k:'T',l:'Thickness (in)'},{k:'wa',l:'Waste %',v:5}],
+  out:o=>[['Concrete needed',fmt(o.L*o.W*(o.T/12)/27*(1+o.wa/100))+' cu yd']]},
+ {cat:'Vertical',name:'Concrete mix materials',src:'TM 3-34.44',
+  note:'Splits a concrete volume into cement, sand, and gravel by your mix ratio. Set the mix (parts by volume) and the dry-material yield factor from the manual; 1 bag of cement ≈ 1 cu ft.',
+  in:[{k:'v',l:'Concrete volume (cu yd)'},{k:'c',l:'Cement parts',v:1},{k:'s',l:'Sand parts',v:2},{k:'g',l:'Gravel parts',v:3},{k:'y',l:'Dry yield factor',v:1.54}],
+  out:o=>{const dry=o.v*27*o.y,sum=o.c+o.s+o.g;return [['Cement',fmt(dry*o.c/sum)+' bags'],['Sand',fmt(dry*o.s/sum)+' cu ft'],['Gravel',fmt(dry*o.g/sum)+' cu ft']];}},
+ {cat:'Vertical',name:'Masonry — CMU block count',src:'TM 3-34.44',
+  note:'Standard 8×8×16 in. concrete block (1.125 blocks per sq ft of wall). Subtract openings and add a waste allowance.',
+  in:[{k:'L',l:'Wall length (ft)'},{k:'H',l:'Wall height (ft)'},{k:'op',l:'Openings (sq ft)',v:0},{k:'wa',l:'Waste %',v:5}],
+  out:o=>{const a=o.L*o.H-o.op;return [['Net wall area',fmt(a)+' sq ft'],['Blocks needed',fmt(Math.ceil(a*1.125*(1+o.wa/100)))]];}},
+ {cat:'Vertical',name:'Lumber — board feet',src:'TM 3-34.47',
+  note:'Board feet = (thickness-in × width-in × length-ft) ÷ 12 × number of pieces.',
+  in:[{k:'t',l:'Thickness (in)'},{k:'w',l:'Width (in)'},{k:'L',l:'Length (ft)'},{k:'q',l:'Pieces',v:1}],
+  out:o=>[['Board feet',fmt(o.t*o.w*o.L/12*o.q)+' bd ft']]},
+ {cat:'Vertical',name:'Wall framing — stud count',src:'TM 3-34.47',
+  note:'Studs on center for a wall. Add plates, corner/partition posts, and extra studs at openings separately.',
+  in:[{k:'L',l:'Wall length (ft)'},{k:'sp',l:'Stud spacing (in)',v:16}],
+  out:o=>[['Field studs',fmt(Math.floor(o.L*12/o.sp)+1)],['Then add','plates, corners, openings']]}
+];
+function fmt(n){return (!isFinite(n))?'—':(Math.round(n*100)/100).toLocaleString();}
+function toolCard(t){
+ const d=document.createElement('details');d.className='card tool';d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':'#2f7d6b');
+ const ins=t.in.map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${f.v!=null?f.v:''}"></label>`).join('');
+ d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p><div class="tins">${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
+ const outs=d.querySelector('.touts');
+ function calc(){const o={};d.querySelectorAll('input[data-k]').forEach(x=>o[x.dataset.k]=parseFloat(x.value));let rows;try{rows=t.out(o)||[];}catch(e){rows=[];}outs.innerHTML=rows.map(r=>`<div class="tout"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
+ d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)calc();});
+ return d;
+}
 function render(){
  const guide=tab==='guide';
  crumbEl.hidden=!(guide&&!q&&(special||disc||man));
@@ -116,6 +160,10 @@ function render(){
   const rows=DATA.tables.filter(t=>!q||(t.t+' '+t.cap).toLowerCase().includes(q));
   countEl.textContent=rows.length+' tables'+(q?` matching "${q}"`:'');
   rows.forEach(t=>{const el=document.createElement('div');el.className='tbl';el.innerHTML=`<div class="cap">${esc(t.t)}. ${esc(t.cap)}</div><img src="${DATA.images[t.img]}" alt="" loading="lazy" decoding="async">`;el.onclick=()=>viewer(t.img,t.t+'. '+t.cap);frag.appendChild(el);});
+ } else if(tab==='tools'){
+  countEl.textContent='Production estimate tools — built from the manuals';
+  ['Horizontal','Vertical'].forEach((cat,i)=>{const h=document.createElement('div');h.className='idxhead toolcat'+(i===0?' first':'');h.textContent=cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
+  const n=document.createElement('p');n.className='src';n.style.margin='16px 2px';n.textContent='These follow the formulas in the referenced manuals. Enter the job factors (swell, shrinkage, efficiency, mix, waste) from your manual — the tool does the math. Verify critical estimates against the source.';frag.appendChild(n);
  } else {
   const rows=DATA.glossary.filter(g=>!q||(g.t+' '+g.d).toLowerCase().includes(q));
   countEl.textContent=rows.length+' terms'+(q?` matching "${q}"`:'');
@@ -128,7 +176,7 @@ listEl.addEventListener('click',e=>{
  const st=e.target.closest('.star');if(st){e.preventDefault();e.stopPropagation();toggleFav(st.dataset.fid);st.classList.toggle('on');return;}
  const rf=e.target.closest('.ref');if(rf){e.preventDefault();e.stopPropagation();viewer(rf.dataset.k,rf.dataset.l);return;}
  const b=e.target.closest('.pcell,.figbtn');if(b){e.preventDefault();viewer(b.dataset.fig,b.dataset.fig);}});
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected','false'));t.setAttribute('aria-selected','true');tab=t.dataset.tab;q='';$('#q').value='';$('#qx').style.display='none';$('#q').placeholder=tab==='guide'?(man?'Search '+MANFULL[man].name+'…':disc?'Search '+disc+'…':'Search all manuals…'):(tab==='tables'?'Search tables…':'Search glossary…');render();window.scrollTo(0,0);});
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected','false'));t.setAttribute('aria-selected','true');tab=t.dataset.tab;q='';$('#q').value='';$('#qx').style.display='none';$('#q').placeholder=tab==='guide'?(man?'Search '+MANFULL[man].name+'…':disc?'Search '+disc+'…':'Search all manuals…'):(tab==='tables'?'Search tables…':tab==='tools'?'Production estimate tools':'Search glossary…');render();window.scrollTo(0,0);});
 const qi=$('#q');qi.addEventListener('input',()=>{q=qi.value.trim().toLowerCase();$('#qx').style.display=q?'block':'none';render();});
 $('#qx').onclick=()=>{qi.value='';q='';$('#qx').style.display='none';render();qi.focus();};
 // contact sheet
