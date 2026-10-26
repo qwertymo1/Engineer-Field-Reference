@@ -1,4 +1,4 @@
-/* build b614db417f */
+/* build 083b6525a0 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -17,12 +17,30 @@ function applyBackup(str){try{let s=(str||'').trim();if(!s)return false;if(s.ind
 try{const t=localStorage.getItem('efr-theme'); if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}
 $('#theme').onclick=()=>{const d=document.documentElement; const cur=d.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'); const nx=cur==='dark'?'light':'dark'; d.setAttribute('data-theme',nx); try{localStorage.setItem('efr-theme',nx);}catch(e){}};
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){let el=$('#toast');if(!el){el=document.createElement('div');el.id='toast';el.className='toast';document.body.appendChild(el);}el.textContent=m;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1400);}
+function copyTxt(txt,msg){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>fbCopy(txt,msg));}else fbCopy(txt,msg);}
+function fbCopy(txt,msg){const a=document.createElement('textarea');a.value=txt;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();try{document.execCommand('copy');toast(msg);}catch(e){}a.remove();}
+function copyTask(id){const e=byId[id];if(!e)return;const m=MANFULL[e.doc]||{name:e.doc};let t=(e.n||'').toUpperCase()+'\n'+m.name+(e.sn?' · '+e.sn:'')+'\n';if(e.desc)t+='\n'+e.desc+'\n';[['Use case',e.use],['How to',e.how],['Dimensions',e.dim],['Equipment',e.eq],['Time / effort',e.tm],['Protection',e.pr],['Warnings',e.wn]].forEach(r=>{if(r[1])t+='\n'+r[0]+': '+r[1];});t+='\n\nSource: '+(e.src||'');copyTxt(t,'Copied as text');}
+function shareLink(id){copyTxt(location.origin+location.pathname+'#'+id,'Link copied');}
+const CONV={Length:[['Feet',0.3048],['Meters',1],['Inches',0.0254],['Yards',0.9144]],
+ Volume:[['Cubic yards',0.764555],['Cubic meters',1],['Cubic feet',0.0283168]],
+ Area:[['Square feet',0.092903],['Square meters',1],['Acres',4046.86],['Square yards',0.836127]],
+ Weight:[['Pounds',0.453592],['Kilograms',1],['Short tons',907.185],['Metric tons',1000]]};
+function makeConverter(){
+ const cat=lsGet('efr-convcat','Length'),u=CONV[cat]||CONV.Length;
+ const box=document.createElement('div');box.className='conv';
+ box.innerHTML=`<div class="cr"><div><input id="cvA" type="number" inputmode="decimal" value="1" aria-label="From value"><select id="cvAU" aria-label="From unit">${u.map((x,i)=>`<option value="${i}">${esc(x[0])}</option>`).join('')}</select></div><div class="eq">=</div><div><input id="cvB" type="number" inputmode="decimal" readonly aria-label="Result"><select id="cvBU" aria-label="To unit">${u.map((x,i)=>`<option value="${i}" ${i===1?'selected':''}>${esc(x[0])}</option>`).join('')}</select></div></div><div class="srow" style="margin-top:10px">${Object.keys(CONV).map(c=>`<button class="chip" aria-pressed="${c===cat}" data-cat="${c}">${c}</button>`).join('')}</div>`;
+ const A=box.querySelector('#cvA'),B=box.querySelector('#cvB'),AU=box.querySelector('#cvAU'),BU=box.querySelector('#cvBU');
+ function cv(){const a=parseFloat(A.value),base=a*u[+AU.value][1];B.value=isFinite(base)?(base/u[+BU.value][1]).toLocaleString(undefined,{maximumFractionDigits:4}):'';}
+ [A,AU,BU].forEach(el=>el.addEventListener('input',cv));cv();
+ box.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{lsSet('efr-convcat',b.dataset.cat);render();});
+ return box;}
 function hay(o){return [o.n,o.c,o.desc,o.use,o.how,o.dim,o.eq,o.tm,o.pr,o.wn,o.src,o.sn].join(' ').toLowerCase();}
 function lnk(v,doc){if(!v)return '';return esc(v).replace(/(Table|Figure)s?\s+([0-9A-Za-z]+-\d+)/gi,(m,k,num)=>{const kk=k.charAt(0).toUpperCase()+k.slice(1).toLowerCase(),nn=num.toUpperCase();const key=doc+' '+kk+' '+nn;return DATA.images[key]?`<a class="ref" data-k="${key}" data-l="${kk+' '+nn}">${m}</a>`:m;});}
 function viewer(imgKey,title){const im=DATA.images[imgKey];if(!im)return;$('#vimg').src=im;$('#vtitle').textContent=title||'';$('#viewer').classList.add('on');}
 $('#vclose').onclick=()=>{$('#viewer').classList.remove('on');$('#vimg').src='';};
 $('#viewer').addEventListener('click',e=>{if(e.target.id==='viewer'){$('#viewer').classList.remove('on');$('#vimg').src='';}});
-function taskCard(t){const d=document.createElement('details');d.className='card';d.style.setProperty('--col',t.col);
+function taskCard(t){const d=document.createElement('details');d.className='card';d.dataset.tid=t.id;d.style.setProperty('--col',t.col);
  let kv='';const row=(l,v,w)=>{if(v)kv+=`<dt>${l}</dt><dd class="${w?'w':''}">${lnk(v,t.doc)}</dd>`;};
  row('Type',t.tp);row('Use case',t.use);row('How to',t.how);row('Dimensions',t.dim);row('Equipment',t.eq);row('Time / effort',t.tm);row('Protection',t.pr);row('Warnings',t.wn,1);
  const pics=(t.figs||[]).filter(k=>DATA.images[k]);
@@ -31,14 +49,14 @@ function taskCard(t){const d=document.createElement('details');d.className='card
    pics.map(k=>`<button class="pcell" data-fig="${esc(k)}"><img src="${DATA.images[k]}" alt="" loading="lazy" decoding="async"><span>${esc(k.split(' ').slice(1).join(' '))}</span></button>`).join('')+`</div></div>`;}
  const tag=(q||special)?`<span class="seclab">${esc(t.sn)}</span>`:'';
  d.innerHTML=`<summary><span class="nm">${esc(t.n)}</span>${tag}<button class="star${isFav(t.id)?' on':''}" data-fid="${esc(t.id)}" aria-label="Save to favorites" title="Save">&#9733;</button><span class="car">&rsaquo;</span></summary>`+
-  `<div class="body">${t.desc?`<div class="lead">${lnk(t.desc,t.doc)}</div>`:''}<dl class="kv">${kv}</dl>${fig}<div class="src">Source: ${lnk(t.src,t.doc)}</div></div>`;
+  `<div class="body">${t.desc?`<div class="lead">${lnk(t.desc,t.doc)}</div>`:''}<dl class="kv">${kv}</dl>${fig}<div class="cardacts"><button class="cact" data-copy="${esc(t.id)}">Copy text</button><button class="cact" data-share="${esc(t.id)}">Share link</button></div><div class="src">Source: ${lnk(t.src,t.doc)}</div></div>`;
  d.addEventListener('toggle',()=>{if(d.open)addRecent(t.id);});
  return d;}
-function topicEl(t){const el=document.createElement('div');el.className='topic';el.style.setProperty('--col',t.col);
+function topicEl(t){const el=document.createElement('div');el.className='topic';el.dataset.tid=t.id;el.style.setProperty('--col',t.col);
  const parts=[];if(t.desc)parts.push(t.desc);if(t.how&&t.how!==t.desc)parts.push(t.how);
  const kf=[t.dim,t.eq,t.pr,t.wn].filter(Boolean).join('; ');
  const tag=(q||special)?` <span class="seclab">${esc(t.sn)}</span>`:'';
- el.innerHTML=`<h3>${esc(t.n)}${tag}</h3>${t.use?`<div class="use">When / why: ${lnk(t.use,t.doc)}</div>`:''}<p>${lnk(parts.join(' '),t.doc)}</p>${kf?`<div class="kf"><b>Key facts:</b> ${lnk(kf,t.doc)}</div>`:''}<div class="src">Source: ${lnk(t.src,t.doc)}</div>`;
+ el.innerHTML=`<h3>${esc(t.n)}${tag}</h3>${t.use?`<div class="use">When / why: ${lnk(t.use,t.doc)}</div>`:''}<p>${lnk(parts.join(' '),t.doc)}</p>${kf?`<div class="kf"><b>Key facts:</b> ${lnk(kf,t.doc)}</div>`:''}<div class="cardacts"><button class="cact" data-copy="${esc(t.id)}">Copy text</button><button class="cact" data-share="${esc(t.id)}">Share link</button></div><div class="src">Source: ${lnk(t.src,t.doc)}</div>`;
  return el;}
 function entryEl(t){return t.kind==='task'?taskCard(t):topicEl(t);}
 function go(d,m,s){special=null;disc=d;man=m;sec=s||'ALL';q='';$('#q').value='';$('#qx').style.display='none';saveLast();render();window.scrollTo(0,0);}
@@ -181,12 +199,12 @@ function render(){
    const dd=DATA.disciplines.find(x=>x.d===disc);
    crumb([{label:'Disciplines',fn:()=>go(null,null,'ALL')},{label:disc}]);
    dd.mans.forEach(m=>{const b=document.createElement('button');b.className='mancard';b.style.setProperty('--dc',dd.color);
-    b.innerHTML=`<div class="mh"><span class="mn">${esc(m.name)}</span><span class="cnt">${m.n} items</span></div><div class="mf">${esc(m.full)}</div><div class="syn">${esc(m.syn)}</div><div class="go">View sections ›</div>`;
+    b.innerHTML=`<div class="mh"><span class="mn">${esc(m.name)}</span><span class="cnt">${m.n} items</span></div><div class="mf">${esc(m.full)}</div><div class="syn">${esc(m.syn)}</div>${m.date?`<div class="mdate">Published ${esc(m.date)}</div>`:''}<div class="go">View sections ›</div>`;
     b.onclick=()=>go(disc,m.k,'ALL');frag.appendChild(b);});
   } else if(sec==='ALL'){
    const dd=DATA.disciplines.find(x=>x.d===disc),m=dd.mans.find(x=>x.k===man);
    crumb([{label:'Disciplines',fn:()=>go(null,null,'ALL')},{label:disc,fn:()=>go(disc,null,'ALL')},{label:m.name}]);
-   const syn=document.createElement('div');syn.className='synbox';syn.innerHTML=`<b>${esc(m.name)} — ${esc(m.full)}.</b> ${esc(m.syn)}`;countEl.appendChild(syn);
+   const syn=document.createElement('div');syn.className='synbox';syn.innerHTML=`<b>${esc(m.name)} — ${esc(m.full)}${m.date?', '+esc(m.date):''}.</b> ${esc(m.syn)}`;countEl.appendChild(syn);
    const h=document.createElement('div');h.className='idxhead';h.textContent='Sections:';countEl.appendChild(h);
    DATA.sections[man].forEach(s=>{const b=document.createElement('button');b.className='secbtn';b.style.setProperty('--accent',dd.color);
     b.innerHTML=`<span class="sk" style="background:${dd.color}">${esc(s.label)}</span><span class="snm">${esc(s.name)}</span><span class="sn">${s.n}</span><span class="car">&rsaquo;</span>`;
@@ -213,8 +231,9 @@ function render(){
   countEl.textContent=rows.length+' tables'+(q?` matching "${q}"`:'');
   rows.forEach(t=>{const el=document.createElement('div');el.className='tbl';el.innerHTML=`<div class="cap">${esc(t.t)}. ${esc(t.cap)}</div><img src="${DATA.images[t.img]}" alt="" loading="lazy" decoding="async">`;el.onclick=()=>viewer(t.img,t.t+'. '+t.cap);frag.appendChild(el);});
  } else if(tab==='tools'){
-  countEl.textContent='Production estimate tools — built from the manuals';
-  ['Horizontal','Vertical'].forEach((cat,i)=>{const h=document.createElement('div');h.className='idxhead toolcat'+(i===0?' first':'');h.textContent=cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
+  countEl.textContent='Field tools — converter & production estimates';
+  const ch=document.createElement('div');ch.className='idxhead toolcat first';ch.textContent='Unit converter';frag.appendChild(ch);frag.appendChild(makeConverter());
+  ['Horizontal','Vertical'].forEach((cat)=>{const h=document.createElement('div');h.className='idxhead toolcat';h.textContent=cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
   const n=document.createElement('p');n.className='src';n.style.margin='16px 2px';n.textContent='These follow the formulas in the referenced manuals. Enter the job factors (swell, shrinkage, efficiency, mix, waste) from your manual — the tool does the math. Verify critical estimates against the source.';frag.appendChild(n);
  } else {
   const rows=DATA.glossary.filter(g=>!q||(g.t+' '+g.d).toLowerCase().includes(q));
@@ -225,6 +244,8 @@ function render(){
  listEl.appendChild(frag);
 }
 listEl.addEventListener('click',e=>{
+ const cp=e.target.closest('[data-copy]');if(cp){e.preventDefault();e.stopPropagation();copyTask(cp.dataset.copy);return;}
+ const sh=e.target.closest('[data-share]');if(sh){e.preventDefault();e.stopPropagation();shareLink(sh.dataset.share);return;}
  const st=e.target.closest('.star');if(st){e.preventDefault();e.stopPropagation();toggleFav(st.dataset.fid);st.classList.toggle('on');return;}
  const rf=e.target.closest('.ref');if(rf){e.preventDefault();e.stopPropagation();viewer(rf.dataset.k,rf.dataset.l);return;}
  const b=e.target.closest('.pcell,.figbtn');if(b){e.preventDefault();viewer(b.dataset.fig,b.dataset.fig);}});
@@ -275,7 +296,14 @@ window.addEventListener('popstate',()=>{
 $('#lcancel').onclick=()=>{$('#leave').hidden=true;};
 $('#leave').addEventListener('click',e=>{if(e.target.id==='leave')$('#leave').hidden=true;});
 $('#lyes').onclick=()=>{_leaving=true;$('#leave').hidden=true;history.go(-2);setTimeout(()=>{_leaving=false;try{window.close();}catch(e){}},500);};
-// resume where you left off
-(function(){const l=lsGet('efr-last',null);if(!l||!l.disc)return;const dd=DATA.disciplines.find(x=>x.d===l.disc);if(!dd)return;disc=l.disc;
- if(l.man&&dd.mans.some(x=>x.k===l.man)){man=l.man;sec=(l.sec&&DATA.sections[l.man]&&DATA.sections[l.man].some(x=>x.k===l.sec))?l.sec:'ALL';}})();
-render();
+// deep link (shareable), else resume where you left off
+(function(){
+ let h='';try{h=decodeURIComponent((location.hash||'').slice(1));}catch(e){}
+ if(h){
+  if(['tables','glossary','tools'].includes(h)){const tb=document.querySelector('.tab[data-tab="'+h+'"]');if(tb){tb.click();return;}}
+  const e=byId[h];
+  if(e){go(e.disc,e.doc,e.sk);const el=document.querySelector('[data-tid="'+e.id.replace(/[^A-Za-z0-9._-]/g,'')+'"]');if(el){if(el.tagName==='DETAILS')el.open=true;el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1700);}return;}
+ }
+ const l=lsGet('efr-last',null);if(l&&l.disc){const dd=DATA.disciplines.find(x=>x.d===l.disc);if(dd){disc=l.disc;if(l.man&&dd.mans.some(x=>x.k===l.man)){man=l.man;sec=(l.sec&&DATA.sections[l.man]&&DATA.sections[l.man].some(x=>x.k===l.sec))?l.sec:'ALL';}}}
+ render();
+})();
