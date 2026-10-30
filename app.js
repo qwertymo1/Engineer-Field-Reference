@@ -1,4 +1,4 @@
-/* build 60e9392564 */
+/* build df45e2cb19 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -53,7 +53,7 @@ const MAN_ORDER_JS=DATA.manOrder||[];
 function trustLine(){
  const el=document.createElement('div');el.className='trust';
  const off=lsGet('efr-offline',null);
- el.innerHTML=(off?`<span class="ok">&#10003; Offline ready</span>`:`<span>Not yet saved offline &mdash; </span>`)+
+ el.innerHTML=(off?`<span class="tstat ok">&#10003; Offline ready</span>`:`<span class="tstat">Not yet saved offline &mdash; </span>`)+
   (off?'':`<a style="color:var(--accent-ink);font-weight:700;cursor:pointer" id="trustoff">download for offline</a>`)+
   `<span> &middot; Guide updated ${esc(DATA.build||'')}</span>`;
  if(!off){el.querySelector('#trustoff').onclick=openOffline;}
@@ -381,14 +381,31 @@ function setOsta(m,ok){const el=$('#osta');el.textContent=m||'';el.className='bs
 function openOffline(){$('#csheet').hidden=true;const o=lsGet('efr-offline',null);setOsta(o?('All '+o.n+' figures & tables saved for offline use ✓'):'',true);$('#odl').textContent=o?'Refresh offline copy':'Download all for offline';$('#oprog').hidden=true;$('#obarfill').style.width='0%';$('#opct').textContent='0%';$('#osheet').hidden=false;guard();}
 $('#oclose').onclick=()=>{$('#osheet').hidden=true;};
 $('#osheet').addEventListener('click',e=>{if(e.target.id==='osheet')$('#osheet').hidden=true;});
-$('#odl').onclick=async()=>{const b=$('#odl');b.disabled=true;$('#oprog').hidden=false;setOsta('');
+let offBusy=false;
+function paintTrust(txt,ok){document.querySelectorAll('.trust .tstat').forEach(el=>{el.textContent=txt;if(ok!==undefined)el.className='tstat'+(ok?' ok':'');});const l=document.querySelector('.trust #trustoff');if(l&&ok)l.remove();}
+async function offlineRun(onp){
+ if(offBusy)return false;offBusy=true;
  const urls=Object.values(DATA.images),total=urls.length;let done=0,i=0,cache=null;
  try{cache=await caches.open('efr-images-v1');}catch(e){}
- const upd=()=>{const p=total?Math.round(done/total*100):100;$('#obarfill').style.width=p+'%';$('#opct').textContent=p+'%';};
- async function worker(){while(i<urls.length){const u=urls[i++];try{if(cache){const hit=await cache.match(u);if(!hit){const r=await fetch(u,{cache:'reload'});if(r&&r.ok)await cache.put(u,r.clone());}}else{await fetch(u);}}catch(e){}done++;upd();}}
- try{await Promise.all([0,0,0,0,0,0].map(worker));lsSet('efr-offline',{n:total,ts:Date.now()});setOsta('All '+total+' figures & tables saved for offline use ✓',true);b.textContent='Refresh offline copy';}
- catch(e){setOsta('Download interrupted — tap again to resume.',false);}
+ async function worker(){while(i<urls.length){const u=urls[i++];try{if(cache){const hit=await cache.match(u);if(!hit){const r=await fetch(u,{cache:'reload'});if(r&&r.ok)await cache.put(u,r.clone());}}else{await fetch(u);}}catch(e){}done++;if(onp)onp(total?Math.round(done/total*100):100);}}
+ try{await Promise.all([0,0,0,0,0,0].map(worker));lsSet('efr-offline',{n:total,ts:Date.now()});offBusy=false;return total;}
+ catch(e){offBusy=false;return false;}}
+$('#odl').onclick=async()=>{const b=$('#odl');b.disabled=true;$('#oprog').hidden=false;setOsta('');
+ const upd=p=>{$('#obarfill').style.width=p+'%';$('#opct').textContent=p+'%';paintTrust('Saving for offline… '+p+'%');};
+ const n=await offlineRun(upd);
+ if(n){setOsta('All '+n+' figures & tables saved for offline use ✓',true);b.textContent='Refresh offline copy';paintTrust('✓ Offline ready',true);}
+ else setOsta('Download interrupted — tap again to resume.',false);
  b.disabled=false;};
+// automatic offline save: runs quietly after load on Wi-Fi/unmetered, resumes after interruptions, and re-runs when new figures ship
+function autoOffline(){try{
+ if(!/^https?:$/.test(location.protocol)||!('caches' in window))return;
+ const urls=Object.values(DATA.images);if(!urls.length||String(urls[0]).startsWith('data:'))return;
+ const o=lsGet('efr-offline',null);if(o&&o.n===urls.length)return;
+ const c=navigator.connection;if(c&&(c.saveData||c.type==='cellular'))return;
+ setTimeout(async()=>{if(!navigator.onLine)return;
+  const n=await offlineRun(p=>paintTrust('Saving for offline… '+p+'%'));
+  if(n)paintTrust('✓ Offline ready',true);else paintTrust('Offline save paused — will resume');},4000);
+}catch(e){}}
 $('#bclose').onclick=()=>{$('#bsheet').hidden=true;};
 $('#bsheet').addEventListener('click',e=>{if(e.target.id==='bsheet')$('#bsheet').hidden=true;});
 $('#bcopy').onclick=async()=>{const t=$('#bcode');try{await navigator.clipboard.writeText(t.value);$('#bcopy').textContent='Copied';setTimeout(()=>$('#bcopy').textContent='Copy code',1500);}catch(e){t.focus();t.select();try{document.execCommand('copy');$('#bcopy').textContent='Copied';setTimeout(()=>$('#bcopy').textContent='Copy code',1500);}catch(_){}}};
@@ -823,6 +840,7 @@ function pmNote(t,ok){const m=document.getElementById('pmmsg');pmMsg=`<div class
  const l=lsGet('efr-last',null);if(l&&l.disc){const dd=DATA.disciplines.find(x=>x.d===l.disc);if(dd){disc=l.disc;if(l.man&&dd.mans.some(x=>x.k===l.man)){man=l.man;sec=(l.sec&&DATA.sections[l.man]&&DATA.sections[l.man].some(x=>x.k===l.sec))?l.sec:'ALL';}}}
  render();
  if(!h && !lsGet('efr-tips-seen',false)) runTips();
+ autoOffline();
 })();
 function runTips(){let i=0;function show(){const t=TIPS[i];$('#tipbody').innerHTML=`<div class="ti">${t.i}</div><b>${esc(t.t)}</b><p>${esc(t.d)}</p>`;$('#tipnext').textContent=(i<TIPS.length-1)?'Next':'Got it';$('#tipsheet').hidden=false;guard();}
  $('#tipnext').onclick=()=>{i++;if(i<TIPS.length)show();else{$('#tipsheet').hidden=true;lsSet('efr-tips-seen',true);}};
