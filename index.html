@@ -214,6 +214,56 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .btn1{background:var(--warn);color:#fff;border:0;border-radius:10px;padding:12px 18px;font:inherit;font-weight:800;font-size:15px;cursor:pointer}
 .btn2{background:var(--chip);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ---- bottom nav (primary tab control) ---- */
+:root{--navh:60px}
+.botnav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;background:var(--surface);
+ border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0);box-shadow:0 -2px 10px rgba(0,0,0,.08)}
+.botnav .tab{flex:1;background:none;border:0;color:var(--muted);font:inherit;font-weight:700;font-size:11px;
+ padding:7px 2px 8px;border-radius:0;border-bottom:0;border-top:3px solid transparent;cursor:pointer;
+ display:flex;flex-direction:column;align-items:center;gap:2px;min-height:var(--navh);white-space:normal}
+.botnav .tab .bi{font-size:19px;line-height:1}
+.botnav .tab[aria-selected="true"]{color:var(--accent-ink);border-top-color:var(--accent)}
+.wrap{padding-bottom:calc(var(--navh) + 30px + env(safe-area-inset-bottom,0))}
+.toast{bottom:calc(var(--navh) + 14px + env(safe-area-inset-bottom,0))}
+/* key-numbers strip on a task card */
+.keystrip{display:flex;flex-direction:column;gap:5px;background:var(--surface2);border:1px solid var(--line);
+ border-radius:9px;padding:9px 11px;margin:9px 0}
+.keystrip .kr{display:flex;gap:8px;font-size:13px}
+.keystrip .kl{flex:none;font-weight:800;font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--accent-ink);min-width:62px;padding-top:1.5px}
+.keystrip .kr.w .kl,.keystrip .kr.w dd{color:var(--warn)}
+/* checkable how-to steps */
+.steps{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:7px}
+.step{display:flex;align-items:flex-start;gap:9px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer}
+.step input{margin-top:2px;width:18px;height:18px;flex:none}
+.step span{font-size:13.5px;line-height:1.4}
+.step.done span{text-decoration:line-through;color:var(--muted)}
+/* global search result groups */
+.srchgrp{font-weight:800;font-size:12.5px;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.4px;
+ margin:16px 2px 9px;border-top:1px solid var(--line);padding-top:13px}
+.srchgrp.first{border-top:0;padding-top:0;margin-top:2px}
+.srchtbl{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
+ border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;box-shadow:var(--shadow);text-align:left;width:100%;color:var(--fg);font:inherit}
+.srchtbl b{font-size:13px;color:var(--accent-ink);flex:none}
+.srchtbl span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srchterm{border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer}
+.srchtool{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);
+ border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;color:var(--fg);font:inherit;font-weight:700;font-size:13.5px}
+/* job entry cards on the home screen */
+.jobgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:6px}
+@media(min-width:460px){.jobgrid{grid-template-columns:repeat(3,1fr)}}
+.jobcard{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 10px;text-align:center;
+ cursor:pointer;color:var(--fg);font:inherit;box-shadow:var(--shadow)}
+.jobcard .ji{font-size:22px;display:block;margin-bottom:4px}
+.jobcard .jl{font-weight:700;font-size:12.5px}
+/* trust line */
+.trust{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin:0 2px 12px;flex-wrap:wrap}
+.trust .ok{color:var(--accent-ink);font-weight:700}
+/* first-run tips */
+.tipcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:10px;text-align:center}
+.tipcard .ti{font-size:30px;margin-bottom:8px}
+.tipcard b{display:block;font-size:14.5px;margin-bottom:4px}
+.tipcard p{margin:0;font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <div id="app">
  <div class="bar">
@@ -227,16 +277,16 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="search"><span aria-hidden="true">&#128269;</span>
    <input id="q" type="search" placeholder="Search&hellip;" autocomplete="off" aria-label="Search">
    <button class="x" id="qx" aria-label="Clear search">&times;</button></div>
-  <div class="tabs" role="tablist">
-   <button class="tab" role="tab" data-tab="guide" aria-selected="true">Guide</button>
-   <button class="tab" role="tab" data-tab="tables" aria-selected="false">Tables</button>
-   <button class="tab" role="tab" data-tab="glossary" aria-selected="false">Glossary</button>
-   <button class="tab" role="tab" data-tab="tools" aria-selected="false">Tools</button>
-  </div>
   <div class="crumb" id="crumb" hidden></div>
  </div>
  <div class="wrap"><div class="count" id="count"></div><div id="list"></div></div>
 </div>
+<nav class="botnav" role="tablist" aria-label="Main sections">
+ <button class="tab" role="tab" data-tab="guide" aria-selected="true"><span class="bi">&#128218;</span>Guide</button>
+ <button class="tab" role="tab" data-tab="tools" aria-selected="false"><span class="bi">&#128295;</span>Tools</button>
+ <button class="tab" role="tab" data-tab="extras" aria-selected="false"><span class="bi">&#128194;</span>Extras</button>
+ <button class="tab" role="tab" data-tab="settings" aria-selected="false"><span class="bi">&#9881;</span>Settings</button>
+</nav>
 <div class="viewer" id="viewer" role="dialog" aria-modal="true">
  <div class="vt"><b id="vtitle"></b><button id="vclose" aria-label="Close">&times;</button></div>
  <div class="vb"><img id="vimg" alt=""></div>
@@ -250,6 +300,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
    <p class="cmail"><a href="mailto:Dylan.W.Lundquist.Mil@army.mil?subject=Engineer%20Field%20Reference%20feedback">Dylan.W.Lundquist.Mil@army.mil</a>
     <button id="ccopy" class="copy">Copy</button></p>
    <p class="cmsg">Please send me suggestions for any functions you would like to see, or report any bugs that you find.</p>
+  </div>
+ </div>
+</div>
+<div class="sheet center" id="tipsheet" role="dialog" aria-modal="true" hidden>
+ <div class="modal" style="max-width:320px;text-align:center">
+  <div id="tipbody"></div>
+  <div class="mbtns" style="justify-content:center;margin-top:14px">
+   <button id="tipnext" class="btn1" style="background:var(--accent)">Got it</button>
   </div>
  </div>
 </div>
@@ -288,13 +346,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div>
 
 <div id="boot" style="padding:40px 20px;text-align:center;color:#6f6e5a;font:15px system-ui,-apple-system,sans-serif">Loading field reference&hellip;</div>
-<div id="updbar" hidden style="position:fixed;left:0;right:0;bottom:0;z-index:99;background:#46551f;color:#f3f1e4;padding:12px 16px;display:flex;align-items:center;gap:12px;font:14px system-ui,-apple-system,sans-serif;box-shadow:0 -2px 10px rgba(0,0,0,.3)">
+<div id="updbar" hidden style="position:fixed;left:0;right:0;bottom:calc(var(--navh,60px) + env(safe-area-inset-bottom,0));z-index:45;background:#46551f;color:#f3f1e4;padding:12px 16px;display:flex;align-items:center;gap:12px;font:14px system-ui,-apple-system,sans-serif;box-shadow:0 -2px 10px rgba(0,0,0,.3)">
  <span style="flex:1">A new version is available.</span>
  <button id="updbtn" style="background:#f3f1e4;color:#2a331a;border:0;border-radius:8px;padding:9px 15px;font:inherit;font-weight:800;cursor:pointer">Update</button>
 </div>
 <script>
 (function(){
- var V='083b6525a0';
+ var V='23abce53d7';
  fetch('content.json').then(function(r){return r.json();}).then(function(d){
    window.__DATA__=d;
    var b=document.getElementById('boot'); if(b) b.remove();
