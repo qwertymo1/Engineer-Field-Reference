@@ -1,8 +1,8 @@
-/* Engineer Field Reference service worker - build dd6c47a08d */
-const VER='dd6c47a08d';
+/* Engineer Field Reference service worker - build 163abf55bf */
+const VER='163abf55bf';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
-const CORE=["./", "index.html", "app.js", "content.json", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const CORE=["./", "index.html", "app.js", "content.json", "pmcs.json", "pdf-lib.min.js", "da2404-blank.pdf", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install',e=>{
   // cache:'reload' bypasses the browser HTTP cache so a new SW never precaches stale files
   e.waitUntil(caches.open(SHELL).then(c=>c.addAll(CORE.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting()));

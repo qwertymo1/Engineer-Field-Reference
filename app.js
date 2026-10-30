@@ -1,4 +1,4 @@
-/* build dd6c47a08d */
+/* build 163abf55bf */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -319,6 +319,8 @@ function render(){
     frag.appendChild(g);
    }
   }
+ } else if(tab==='pmcs'){
+  renderPmcs(frag);
  } else if(tab==='tools'){
   countEl.textContent='Field tools — converter & production estimates';
   const ch=document.createElement('div');ch.className='idxhead toolcat first';ch.textContent='Unit converter';frag.appendChild(ch);frag.appendChild(makeConverter());
@@ -406,18 +408,415 @@ window.addEventListener('popstate',()=>{
  if(!$('#osheet').hidden){$('#osheet').hidden=true;guard();return;}
  if(!$('#bsheet').hidden){$('#bsheet').hidden=true;guard();return;}
  if(!$('#csheet').hidden){$('#csheet').hidden=true;guard();return;}
+ if(tab==='pmcs'&&typeof pmView!=='undefined'&&pmView.s!=='list'){const m=document.querySelector('.pm-modal');if(m){m.remove();guard();return;}pmBack();guard();return;}
  if(special||disc||man){upLevel();guard();return;}                           // step up inside the app
  $('#leave').hidden=false;guard();                                           // at the top -> ask
 });
 $('#lcancel').onclick=()=>{$('#leave').hidden=true;};
 $('#leave').addEventListener('click',e=>{if(e.target.id==='leave')$('#leave').hidden=true;});
 $('#lyes').onclick=()=>{_leaving=true;$('#leave').hidden=true;history.go(-2);setTimeout(()=>{_leaving=false;try{window.close();}catch(e){}},500);};
+const TIPS=[
+ {i:'&#128269;',t:'Search finds everything',d:'Type in the search box from any tab and get matching tasks, tables, glossary terms, and tools together.'},
+ {i:'&#9733;',t:'Star to save',d:'Tap the star on any task to keep it in your Saved list for fast access later.'},
+ {i:'&#11015;',t:'Download for offline',d:'From the home screen, tap Offline to save every figure and table so the whole guide works with no signal.'}
+];
+
+// ================= PMCS module: guided PMCS -> faults -> DA Form 2404 =================
+const PM_SESS='efr-pmcs-sess', PM_ADM='efr-pmcs-admin';
+const PM_IVORDER=['Before','During','After','Weekly','Monthly','Quarterly','Semiannual','Annually','Periodic'];
+const PM_IVLABEL={Periodic:'Periodic (hours / months)'};
+const PM_SYMS=[
+ {k:'X',g:'X',n:'X',d:'A deficiency in the equipment that places it in an inoperable status.'},
+ {k:'CX',g:'⊗',n:'Circled X',d:'A deficiency, however the equipment may be operated under specific limitations as directed by higher authority or as prescribed locally, until corrective action can be accomplished.'},
+ {k:'/',g:'/',n:'Diagonal',d:'A material defect other than a deficiency which must be corrected to increase efficiency or to make the item completely serviceable.'},
+ {k:'-',g:'–',n:'Dash',d:'A required inspection, component replacement, maintenance operation check, or test flight is due but has not been accomplished, or an overdue MWO has not been accomplished.'}
+];
+let pmData=null, pmView={s:'list'}, pmSess=null, pmMsg='', pmFaultOpen=false, pmFaultSym='', pmPdf=null;
+function pmAll(){return lsGet(PM_SESS,{});}
+function pmSave(){if(!pmView.eq)return;const a=pmAll();a[pmView.eq]=pmSess;lsSet(PM_SESS,a);}
+function pmLoadData(){
+ if(pmData)return Promise.resolve(pmData);
+ if(window.__PMCS__){pmData=window.__PMCS__;pmPrep();return Promise.resolve(pmData);}
+ return fetch('pmcs.json?v='+encodeURIComponent(window.__BUILD__||''),{cache:'no-cache'}).then(r=>{if(!r.ok)throw 0;return r.json();}).then(d=>{pmData=d;pmPrep();return d;});
+}
+function pmPrep(){pmData.equip.forEach(e=>{const seen={};e.steps.forEach((s,i)=>{let k=s.id;if(seen[k]){seen[k]++;k=s.id+'#'+seen[k];}else seen[k]=1;s.key=k;s.i=i;});});}
+function pmEq(id){return pmData.equip.find(e=>e.id===id);}
+function pmIvs(e){const set={};e.steps.forEach(s=>s.iv.forEach(i=>{set[i]=(set[i]||0)+1;}));return PM_IVORDER.filter(i=>set[i]).map(i=>[i,set[i]]);}
+function pmSteps(e,ivs){return e.steps.filter(s=>s.iv.some(i=>ivs.includes(i)));}
+function pmCounts(e,sess){const st=pmSteps(e,sess.iv);let ok=0,f=0,na=0;st.forEach(s=>{const a=sess.ans[s.key];if(!a)return;if(a.r==='ok')ok++;else if(a.r==='fault')f++;else na++;});return{total:st.length,ok,f,na,left:st.length-ok-f-na};}
+function pmEsc(s){return esc(s==null?'':s);}
+function pmTop(){window.scrollTo(0,0);}
+
+function renderPmcs(frag){
+ countEl.textContent='PMCS — guided checks & DA Form 2404';
+ const w=document.createElement('div');w.className='pm-wrap';frag.appendChild(w);
+ if(!pmData){w.innerHTML='<div class="empty">Loading PMCS data…</div>';
+  pmLoadData().then(()=>render()).catch(()=>{w.innerHTML='<div class="empty">PMCS data could not be loaded. Connect once, or tap Download TMs for offline use on the Guide tab, then reopen this tab.</div>';});return;}
+ const v=pmView;
+ if(v.s==='list')pmList(w);
+ else if(v.s==='intro')pmIntro(w);
+ else if(v.s==='step')pmStep(w);
+ else if(v.s==='review')pmReview(w);
+ else if(v.s==='admin')pmAdmin(w);
+ else if(v.s==='done')pmDone(w);
+}
+function pmGo(s,extra){Object.assign(pmView,extra||{});pmView.s=s;pmMsg='';render();pmTop();}
+function pmBack(){
+ const s=pmView.s;
+ if(s==='step'){pmGo('list');return;}
+ if(s==='review'){pmGo('step',{});return;}
+ if(s==='admin'){pmGo('review');return;}
+ if(s==='done'){pmGo('admin');return;}
+ pmGo('list');
+}
+
+// ---------- 1. equipment list ----------
+function pmList(w){
+ const intro=document.createElement('p');intro.className='pm-note';
+ intro.textContent='Pick your equipment, choose the PMCS interval, and step through every check in the TM. Record faults as you go; at the end the app fills out a DA Form 2404 you can download or email.';
+ w.appendChild(intro);
+ const groups=[['Construction equipment',['d6k','deuce','hmee','loader']],['Vehicles',['hmmwv','m915','dump']]];
+ const all=pmAll();
+ groups.forEach(([gname,ids])=>{
+  const h=document.createElement('div');h.className='pm-h';h.textContent=gname;w.appendChild(h);
+  ids.map(pmEq).filter(Boolean).forEach(e=>{
+   const b=document.createElement('button');b.className='pm-eq';
+   const ss=all[e.id];let res='';
+   if(ss&&ss.ans&&Object.keys(ss.ans).length){const c=pmCounts(e,ss);res=`<span class="resume">Resume — ${c.total-c.left} of ${c.total} done${c.f?' · '+c.f+' fault'+(c.f===1?'':'s'):''}</span>`;}
+   b.innerHTML=`<div class="t"><span class="n">${pmEsc(e.name)}</span><span class="c">${e.steps.length} checks</span></div><div class="s">${pmEsc(e.sub)}</div><div class="tm">${pmEsc(e.tm)}${e.date?' · '+pmEsc(e.date):''}</div>${res}`;
+   b.onclick=()=>{pmView={s:'intro',eq:e.id};pmSess=all[e.id]||null;pmGo('intro');};
+   w.appendChild(b);
+  });
+ });
+ const n=document.createElement('p');n.className='pm-note';
+ n.textContent='Every check, procedure and “not fully mission capable” condition comes straight from the TM listed on each card. Always follow the full TM for the vehicle or machine in front of you.';
+ w.appendChild(n);
+}
+
+// ---------- 2. interval picker ----------
+function pmIntro(w){
+ const e=pmEq(pmView.eq);
+ const ex=pmSess;
+ const back=document.createElement('button');back.className='pm-lk';back.textContent='‹ All equipment';back.onclick=()=>pmGo('list');w.appendChild(back);
+ const c=document.createElement('div');c.className='pm-card';
+ c.innerHTML=`<div class="pm-loc">${pmEsc(e.tm)}${e.date?' · '+pmEsc(e.date):''}</div><div class="pm-title">${pmEsc(e.name)}</div><div class="s" style="color:var(--muted);font-size:13px">${pmEsc(e.sub)}</div>`;
+ w.appendChild(c);
+ const ivs=pmIvs(e);
+ let sel=(ex&&ex.iv)||[(ivs.find(x=>x[0]==='Before')||ivs[0])[0]];
+ const h=document.createElement('div');h.className='pm-h';h.textContent='Which PMCS are you doing?';w.appendChild(h);
+ const row=document.createElement('div');row.className='pm-ivrow';w.appendChild(row);
+ const cnt=document.createElement('p');cnt.className='pm-note';w.appendChild(cnt);
+ function paint(){
+  row.innerHTML='';
+  ivs.forEach(([i,n])=>{const b=document.createElement('button');b.setAttribute('aria-pressed',sel.includes(i)?'true':'false');b.textContent=(PM_IVLABEL[i]||i)+' ('+n+')';b.onclick=()=>{sel=sel.includes(i)?sel.filter(x=>x!==i):sel.concat(i);if(!sel.length)sel=[i];paint();};row.appendChild(b);});
+  const n=pmSteps(e,sel).length;cnt.textContent=n+' check'+(n===1?'':'s')+' selected. You can pick more than one interval; checks stay in TM order.';
+  go.disabled=!n;
+ }
+ const go=document.createElement('button');go.className='pm-btn';
+ const stNote=(()=>{if(!ex||!ex.ans||!Object.keys(ex.ans).length)return '';const cc=pmCounts(e,ex);return cc.total-cc.left;})();
+ go.textContent=stNote?'Resume where I left off':'Start PMCS';
+ paint();
+ go.onclick=()=>{
+  const same=ex&&JSON.stringify(ex.iv.slice().sort())===JSON.stringify(sel.slice().sort());
+  if(!same){ if(ex&&Object.keys(ex.ans||{}).length&&!confirm('Changing the interval starts a new inspection and clears the one in progress. Continue?'))return; pmSess={iv:sel,idx:0,ans:{},admin:null,ts:Date.now(),build:window.__BUILD__||''}; }
+  else{ pmSess.iv=sel; }
+  pmSave();
+  const st=pmSteps(e,pmSess.iv);
+  pmView.idx=Math.min(pmSess.idx||0,st.length-1);
+  pmGo('step');
+ };
+ w.appendChild(go);
+ if(ex&&Object.keys(ex.ans||{}).length){const nb=document.createElement('button');nb.className='pm-btn sec';nb.textContent='Discard saved inspection';nb.onclick=()=>{if(!confirm('Discard the inspection in progress for this equipment?'))return;const a=pmAll();delete a[e.id];lsSet(PM_SESS,a);pmSess=null;pmGo('intro');};w.appendChild(nb);}
+ if(e.preface){const h2=document.createElement('div');h2.className='pm-h';h2.textContent='From the TM — read first';w.appendChild(h2);const p=document.createElement('div');p.className='pm-pre';p.textContent=e.preface.replace(/\s*•\s*/g,'\n• ').trim();w.appendChild(p);}
+ const src=document.createElement('p');src.className='pm-note';src.textContent=`Source: ${e.tm}, ${e.table}, pp. ${e.pages} of the PDF supplied.`;w.appendChild(src);
+}
+
+// ---------- 3. guided step ----------
+function pmCoHtml(b){
+ const lab={warning:'WARNING',caution:'CAUTION',notice:'NOTICE',note:'NOTE'}[b.k]||b.k.toUpperCase();
+ const paras=b.t.split('\n').map(x=>`<p>${pmEsc(x)}</p>`).join('');
+ return `<div class="pm-co ${b.k}"><b>${lab}</b>${paras}</div>`;
+}
+function pmStepHtml(s){
+ let html='';
+ s.proc.forEach(b=>{
+  if(b.k==='who')return;
+  if(b.k==='step'){
+   const m=b.t.match(/^([a-z]\.|\(\d+[A-Z]?\)|\d+\.)\s*(.*)$/s);
+   html+=m?`<p class="pm-p"><b>${pmEsc(m[1])}</b> ${pmEsc(m[2])}</p>`:`<p class="pm-p">${pmEsc(b.t)}</p>`;
+  } else html+=pmCoHtml(b);
+ });
+ return html;
+}
+function pmNfHtml(t){
+ if(!t)return '';
+ const parts=t.split(/\n|(?<=[.;])\s+(?=[a-z]\.\s)/).filter(Boolean);
+ return `<div class="pm-nf"><b>NOT FULLY MISSION CAPABLE IF</b>${parts.map(x=>`<p>${pmEsc(x)}</p>`).join('')}</div>`;
+}
+function pmStep(w){
+ const e=pmEq(pmView.eq),st=pmSteps(e,pmSess.iv);
+ let i=Math.max(0,Math.min(pmView.idx||0,st.length-1));pmView.idx=i;pmSess.idx=i;pmSave();
+ const s=st[i],a=pmSess.ans[s.key];
+ const c=pmCounts(e,pmSess);
+ const bar=document.createElement('div');bar.className='pm-bar';
+ bar.innerHTML=`<div class="top"><span><b>${pmEsc(e.name)}</b> · check ${i+1} of ${st.length}${c.f?' · <span style="color:#a43a30">'+c.f+' fault'+(c.f===1?'':'s')+'</span>':''}</span><span><button class="pm-lk" data-a="list">☰ Steps</button><button class="pm-lk" data-a="exit">Exit</button></span></div><div class="pm-prog"><i style="width:${Math.round((st.length-c.left)/st.length*100)}%"></i></div>`;
+ w.appendChild(bar);
+ bar.querySelector('[data-a=list]').onclick=()=>pmJumpList(e,st);
+ bar.querySelector('[data-a=exit]').onclick=()=>pmGo('list');
+ const card=document.createElement('div');card.className='pm-card';
+ const who=s.proc.filter(b=>b.k==='who').map(b=>b.t);
+ const chips=[`<span>Item ${pmEsc(s.id)}</span>`].concat(s.iv.map(x=>`<span>${pmEsc(x)}</span>`),(s.tbl?[`<span>${pmEsc(s.tbl)}</span>`]:[]),who.map(x=>`<span class="who">${pmEsc(x)}</span>`));
+ if(s.ivraw&&/Every/.test(s.ivraw))chips.push(`<span>${pmEsc(s.ivraw)}</span>`);
+ if(s.mh)chips.push(`<span>${pmEsc(s.mh)} man-hr</span>`);
+ card.innerHTML=`${s.loc?`<div class="pm-loc">${pmEsc(s.loc)}</div>`:''}<div class="pm-title">${pmEsc(s.check)||'Check'}</div><div class="pm-chips">${chips.join('')}</div>${pmStepHtml(s)}${pmNfHtml(s.nfmc)}<div class="pm-note" style="margin:8px 0 0">${pmEsc(e.tm)} · PDF p. ${s.pg}</div>`;
+ w.appendChild(card);
+ // current answer state
+ if(a&&a.r==='fault'&&!pmFaultOpen){
+  const f=a.f;
+  const fi=document.createElement('div');fi.className='pm-fi';
+  fi.innerHTML=`<div class="sy">${pmSymGlyph(f.sym)}</div><div class="bd"><div class="it">FAULT RECORDED</div>${pmEsc(f.def)}${f.corr?'<br><i>Corrective action: '+pmEsc(f.corr)+'</i>':''}</div>`;
+  w.appendChild(fi);
+ } else if(a&&a.r==='ok'){w.insertAdjacentHTML('beforeend','<div class="pm-msg ok">Marked OK.</div>');}
+ else if(a&&a.r==='na'){w.insertAdjacentHTML('beforeend','<div class="pm-msg">Marked N/A (not installed or not applicable).</div>');}
+ if(pmFaultOpen){pmFaultForm(w,s,a);}
+ else{
+  const row=document.createElement('div');row.className='pm-row';
+  const ok=document.createElement('button');ok.className='pm-btn ok';ok.textContent='✔ OK';ok.onclick=()=>{pmAns(s,{r:'ok'});pmNext(st);};
+  const bad=document.createElement('button');bad.className='pm-btn bad';bad.textContent='✖ Fault';bad.onclick=()=>{pmFaultOpen=true;pmFaultSym=(a&&a.f&&a.f.sym)||'';render();};
+  row.appendChild(ok);row.appendChild(bad);w.appendChild(row);
+  const na=document.createElement('button');na.className='pm-btn na';na.style.minHeight='42px';na.style.fontSize='14px';na.textContent='N/A — not installed / not applicable';na.onclick=()=>{pmAns(s,{r:'na'});pmNext(st);};w.appendChild(na);
+  const nav=document.createElement('div');nav.className='pm-row';nav.style.marginTop='8px';
+  const pv=document.createElement('button');pv.className='pm-lk';pv.textContent='‹ Previous';pv.disabled=i===0;pv.style.visibility=i===0?'hidden':'visible';pv.onclick=()=>{pmView.idx=i-1;render();pmTop();};
+  const nx=document.createElement('button');nx.className='pm-lk';nx.style.textAlign='right';nx.textContent=i===st.length-1?'Finish ›':'Skip ›';nx.onclick=()=>pmNext(st);
+  nav.appendChild(pv);nav.appendChild(nx);w.appendChild(nav);
+ }
+}
+function pmSymGlyph(k){const x=PM_SYMS.find(y=>y.k===k);return x?x.g:'';}
+function pmAns(s,a){pmSess.ans[s.key]=a;pmSave();}
+function pmNext(st){
+ const i=pmView.idx;
+ if(i>=st.length-1){pmGo('review');return;}
+ pmView.idx=i+1;pmFaultOpen=false;render();pmTop();
+}
+function pmFaultForm(w,s,a){
+ const f=(a&&a.f)||{sym:'',def:'',corr:''};
+ const d=document.createElement('div');d.className='pm-fault';
+ d.innerHTML=`<h4>Record the fault — Item ${pmEsc(s.id)}</h4>
+ <label>Status symbol (DA Form 2404 legend)</label><div class="pm-sym"></div><div class="pm-symhelp"></div>
+ <label for="pmdef">Deficiency / shortcoming (column c)</label><textarea id="pmdef" placeholder="What is wrong? Be specific (location, what you saw/heard/measured)."></textarea>
+ <label for="pmcor">Corrective action (column d) — optional</label><textarea id="pmcor" style="min-height:56px" placeholder="Leave blank if you are reporting only. Fill in if you fixed it."></textarea>`;
+ w.appendChild(d);
+ const sy=d.querySelector('.pm-sym'),hp=d.querySelector('.pm-symhelp'),de=d.querySelector('#pmdef'),co=d.querySelector('#pmcor');
+ de.value=f.def||'';co.value=f.corr||'';
+ function paint(){sy.innerHTML='';PM_SYMS.forEach(x=>{const b=document.createElement('button');b.type='button';b.innerHTML=x.g;b.title=x.n;b.setAttribute('aria-label',x.n);b.setAttribute('aria-pressed',pmFaultSym===x.k?'true':'false');b.onclick=()=>{pmFaultSym=x.k;paint();};sy.appendChild(b);});
+  const x=PM_SYMS.find(y=>y.k===pmFaultSym);hp.innerHTML=x?`<b>${pmEsc(x.n)}</b> — ${pmEsc(x.d)}`:'Pick the symbol that fits. If it matches the red “not fully mission capable” condition above, tell your supervisor.';}
+ paint();
+ const row=document.createElement('div');row.className='pm-row';
+ const sv=document.createElement('button');sv.className='pm-btn bad';sv.textContent='Save fault';
+ sv.onclick=()=>{
+  if(!pmFaultSym){hp.innerHTML='<b style="color:#a43a30">Choose a status symbol first.</b>';return;}
+  if(!de.value.trim()){de.focus();de.style.borderColor='#a43a30';return;}
+  pmAns(s,{r:'fault',f:{sym:pmFaultSym,def:de.value.trim(),corr:co.value.trim(),ts:Date.now()}});
+  pmFaultOpen=false;pmFaultSym='';pmNext(pmSteps(pmEq(pmView.eq),pmSess.iv));
+ };
+ const cn=document.createElement('button');cn.className='pm-btn sec';cn.textContent='Cancel';cn.onclick=()=>{pmFaultOpen=false;render();};
+ row.appendChild(sv);row.appendChild(cn);w.appendChild(row);
+ if(a&&a.r==='fault'){const rm=document.createElement('button');rm.className='pm-btn sec';rm.textContent='Remove this fault (mark OK)';rm.onclick=()=>{pmAns(s,{r:'ok'});pmFaultOpen=false;render();};w.appendChild(rm);}
+}
+function pmJumpList(e,st){
+ const m=document.createElement('div');m.className='pm-modal';
+ const inner=document.createElement('div');m.appendChild(inner);
+ inner.innerHTML=`<h3>${pmEsc(e.name)} — all checks</h3>`;
+ st.forEach((s,i)=>{const a=pmSess.ans[s.key];const b=document.createElement('button');b.className='pm-jump'+(i===pmView.idx?' cur':'');
+  b.innerHTML=`<span class="st ${a?a.r:''}">${a?(a.r==='ok'?'✔':a.r==='fault'?'✖':'–'):'○'}</span><span class="id">${pmEsc(s.id)}</span><span>${pmEsc(s.check||s.proc.map(p=>p.t).join(' ').slice(0,60))}</span>`;
+  b.onclick=()=>{m.remove();pmFaultOpen=false;pmView.idx=i;render();pmTop();};inner.appendChild(b);});
+ const cl=document.createElement('button');cl.className='pm-btn sec';cl.textContent='Close';cl.onclick=()=>m.remove();inner.appendChild(cl);
+ m.addEventListener('click',ev=>{if(ev.target===m)m.remove();});
+ document.body.appendChild(m);
+ const cur=inner.querySelector('.cur');if(cur)cur.scrollIntoView({block:'center'});
+}
+
+// ---------- 4. review ----------
+function pmReview(w){
+ const e=pmEq(pmView.eq),st=pmSteps(e,pmSess.iv),c=pmCounts(e,pmSess);
+ const t=document.createElement('div');t.className='pm-h';t.textContent=`${e.name} — review`;w.appendChild(t);
+ const stat=document.createElement('div');stat.className='pm-stat';
+ stat.innerHTML=`<div><b>${c.ok}</b><span>OK</span></div><div><b style="color:#a43a30">${c.f}</b><span>Faults</span></div><div><b>${c.na}</b><span>N/A</span></div><div><b${c.left?' style="color:#c68a12"':''}>${c.left}</b><span>Not done</span></div>`;
+ w.appendChild(stat);
+ if(c.left){const m=document.createElement('div');m.className='pm-msg err';m.textContent=`${c.left} check${c.left===1?'':'s'} not answered yet. Go back and finish them, or continue — unanswered checks are not written on the form.`;w.appendChild(m);
+  const fb=document.createElement('button');fb.className='pm-btn sec';fb.textContent='Go to first unanswered check';fb.onclick=()=>{const k=st.findIndex(s=>!pmSess.ans[s.key]);pmView.idx=Math.max(0,k);pmGo('step');};w.appendChild(fb);}
+ const fl=st.filter(s=>pmSess.ans[s.key]&&pmSess.ans[s.key].r==='fault');
+ const h=document.createElement('div');h.className='pm-h';h.textContent=fl.length?'Faults that will go on the form':'No faults recorded';w.appendChild(h);
+ fl.forEach(s=>{const f=pmSess.ans[s.key].f;const d=document.createElement('div');d.className='pm-fi';
+  d.innerHTML=`<div class="sy">${pmSymGlyph(f.sym)}</div><div class="bd"><div class="it">ITEM ${pmEsc(s.id)} · ${pmEsc(s.check)}</div>${pmEsc(f.def)}${f.corr?'<br><i>Corrective action: '+pmEsc(f.corr)+'</i>':''}<div><button class="pm-lk" data-i="${s.i}">Edit</button></div></div>`;
+  d.querySelector('[data-i]').onclick=()=>{pmView.idx=st.findIndex(x=>x.key===s.key);pmFaultOpen=true;pmFaultSym=f.sym;pmGo('step');};
+  w.appendChild(d);});
+ const go=document.createElement('button');go.className='pm-btn';go.textContent=fl.length?'Fill out DA Form 2404 ›':'Create a no-fault DA Form 2404 ›';go.onclick=()=>pmGo('admin');w.appendChild(go);
+ const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Back to checks';bk.onclick=()=>{pmView.idx=Math.max(0,st.length-1);pmGo('step');};w.appendChild(bk);
+}
+
+// ---------- 5. admin data ----------
+function pmToday(){const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
+function pmTmDate(e){
+ const m=(e.date||'').match(/^(\d{1,2}) ([A-Za-z]+) (\d{4})/);
+ const mon={JANUARY:1,FEBRUARY:2,MARCH:3,APRIL:4,MAY:5,JUNE:6,JULY:7,AUGUST:8,SEPTEMBER:9,OCTOBER:10,NOVEMBER:11,DECEMBER:12};
+ if(m&&mon[m[2].toUpperCase()])return m[3]+String(mon[m[2].toUpperCase()]).padStart(2,'0')+String(m[1]).padStart(2,'0');
+ const m2=(e.date||'').match(/^([A-Za-z]+) (\d{4})/);
+ if(m2&&mon[m2[1].toUpperCase()])return m2[2]+String(mon[m2[1].toUpperCase()]).padStart(2,'0');
+ return '';
+}
+function pmAdmin(w){
+ const e=pmEq(pmView.eq);
+ const g=lsGet(PM_ADM,{});
+ const a=Object.assign({org:g.org||'',inspector:g.inspector||'',email:g.email||'',model:e.name+(e.sub?' — '+e.sub:''),serial:'',miles:'',hours:'',rounds:'',hot:'',date:pmToday(),type:pmSess.iv.join('/').toUpperCase(),tm1:e.tm,tmd1:pmTmDate(e),tm2:'',tmd2:'',time1:'',mh:''},pmSess.admin||{});
+ const t=document.createElement('div');t.className='pm-h';t.textContent='DA Form 2404 — equipment data';w.appendChild(t);
+ const p=document.createElement('p');p.className='pm-note';p.textContent='Fill in what you know; everything is optional and you can type over any pre-filled box. Your faults are already entered.';w.appendChild(p);
+ const f=document.createElement('div');f.className='pm-form';
+ const fld=(k,label,ph,extra)=>`<div><label for="pa_${k}">${label}</label><input id="pa_${k}" data-k="${k}" value="${pmEsc(a[k])}" placeholder="${pmEsc(ph||'')}" ${extra||''} autocomplete="off" autocapitalize="characters"></div>`;
+ f.innerHTML=`${fld('org','1. Organization','e.g. 1-1 EN BN, A CO')}
+ ${fld('model','2. Nomenclature and model','')}
+ ${fld('serial','3. Registration / serial / NSN','Bumper no., serial no., or NSN')}
+ <div class="g2">${fld('miles','4a. Miles','','inputmode="numeric"')}${fld('hours','4b. Hours','','inputmode="decimal"')}</div>
+ <div class="g2">${fld('rounds','4c. Rounds fired','','inputmode="numeric"')}${fld('hot','4d. Hot starts','','inputmode="numeric"')}</div>
+ <div class="g2">${fld('date','5. Date (YYYYMMDD)','','inputmode="numeric"')}${fld('type','6. Type inspection','')}</div>
+ <div class="g2">${fld('tm1','7. TM number','')}${fld('tmd1','TM date (YYYYMMDD)','','inputmode="numeric"')}</div>
+ <div class="hint">TM date: ${e.date?'the manual prints “'+pmEsc(e.date)+'”':'not printed on the pages supplied'}; add the day if the TM cover gives it, or the date of your latest change.</div>
+ <div class="g2">${fld('tm2','TM number (2nd, optional)','')}${fld('tmd2','TM date (2nd)','','inputmode="numeric"')}</div>
+ ${fld('inspector','8a. Person performing inspection (printed name)','e.g. SPC SMITH, J.')}
+ <div class="g2">${fld('time1','8b. Time (HHMM)','','inputmode="numeric"')}${fld('mh','10. Man-hours required','','inputmode="decimal"')}</div>
+ ${fld('email','Email the form to (optional)','name@army.mil','type="email" inputmode="email" autocapitalize="none"')}
+ <div class="hint">Signature boxes are left blank — print and sign, or sign in your maintenance system.</div>`;
+ w.appendChild(f);
+ const read=()=>{f.querySelectorAll('input[data-k]').forEach(i=>{a[i.dataset.k]=i.value;});pmSess.admin=Object.assign({},a);delete pmSess.admin.org;delete pmSess.admin.inspector;delete pmSess.admin.email;pmSave();lsSet(PM_ADM,{org:a.org,inspector:a.inspector,email:a.email});};
+ f.addEventListener('input',read);
+ const go=document.createElement('button');go.className='pm-btn';go.textContent='Create DA Form 2404 ›';
+ go.onclick=async()=>{read();go.disabled=true;go.textContent='Creating…';pmMsg='';
+  try{pmPdf=await pmBuildPdf(e,a);pmGo('done');}catch(err){go.disabled=false;go.textContent='Create DA Form 2404 ›';const m=document.createElement('div');m.className='pm-msg err';m.textContent='Could not create the PDF: '+(err&&err.message||err);w.appendChild(m);console.error(err);}};
+ w.appendChild(go);
+ const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Back to review';bk.onclick=()=>pmGo('review');w.appendChild(bk);
+}
+
+// ---------- 6. PDF ----------
+function pmLoadLib(){
+ if(window.PDFLib)return Promise.resolve();
+ if(window.__PDFLIB_SRC__){try{(0,eval)(window.__PDFLIB_SRC__);}catch(e){return Promise.reject(e);}return window.PDFLib?Promise.resolve():Promise.reject(new Error('PDF library failed to start'));}
+ return new Promise((res,rej)=>{const s=document.createElement('script');s.src='pdf-lib.min.js?v='+encodeURIComponent(window.__BUILD__||'');s.onload=()=>window.PDFLib?res():rej(new Error('PDF library missing'));s.onerror=()=>rej(new Error('PDF library not available offline yet — connect once and try again'));document.head.appendChild(s);});
+}
+function pmLoadForm(){
+ if(window.__FORM_B64__){const b=atob(window.__FORM_B64__);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return Promise.resolve(u);}
+ return fetch('da2404-blank.pdf?v='+encodeURIComponent(window.__BUILD__||'')).then(r=>{if(!r.ok)throw new Error('blank form not available');return r.arrayBuffer();}).then(b=>new Uint8Array(b));
+}
+function pmAscii(s){return String(s==null?'':s).replace(/[‘’ʼ]/g,"'").replace(/[“”]/g,'"').replace(/[–—−]/g,'-').replace(/•/g,'-').replace(/°/g,' deg').replace(/ /g,' ').replace(/[^\x20-\x7e]/g,'?');}
+const PM_P1=[377.2,353.2,329.2,305.2,281.2,257.2,233.2,209.2,185.2,161.2,137.2,113.3,89.2,65.2,42.0];
+const PM_P2=[726.5,702.5,677.9,653.3,629.3,604.7,580.1,555.5,531.5,506.9,482.3,458.3,433.7,409.1,384.5,360.5,335.9,311.3,287.3,262.7,238.1,213.5,189.5,164.9,140.3,116.3,91.7,67.1,42.0];
+const PM_COL={id:[35,71.2],sym:[71.2,107.2],def:[107.2,301.5],cor:[301.5,510.3],ini:[510.3,575]};
+const PM_HDR={org:[38,717,303,727],model:[308,717,574,727],serial:[38,692,185,702],miles:[188,692,234,702],hours:[239,692,285,702],rounds:[297,690,327,700],hot:[346,690,376,700],date:[399,692,464,702],type:[482,692,571,702],tm1:[38,656,213,666],tmd1:[228,656,293,666],tm2:[308,656,484,666],tmd2:[498,656,563,666],inspector:[38,424,220,444],time1:[225,418,275,448],mh:[518,416,568,446]};
+function pmWrap(font,text,size,maxW){
+ const words=pmAscii(text).replace(/\s+/g,' ').trim().split(' ');const lines=[];let cur='';
+ words.forEach(wd=>{
+  let t=cur?cur+' '+wd:wd;
+  if(font.widthOfTextAtSize(t,size)<=maxW){cur=t;return;}
+  if(cur){lines.push(cur);cur='';}
+  while(font.widthOfTextAtSize(wd,size)>maxW){let k=wd.length;while(k>1&&font.widthOfTextAtSize(wd.slice(0,k),size)>maxW)k--;lines.push(wd.slice(0,k));wd=wd.slice(k);}
+  cur=wd;});
+ if(cur)lines.push(cur);return lines;
+}
+async function pmBuildPdf(e,a){
+ await pmLoadLib();
+ const tpl=await pmLoadForm();
+ const {PDFDocument,StandardFonts,rgb}=window.PDFLib;
+ const doc=await PDFDocument.load(tpl);
+ const font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
+ const ink=rgb(0.04,0.1,0.45);
+ // gather faults
+ const st=pmSteps(e,pmSess.iv);
+ const faults=st.filter(s=>pmSess.ans[s.key]&&pmSess.ans[s.key].r==='fault').map(s=>Object.assign({s},pmSess.ans[s.key].f));
+ // lay out rows: each fault may need >1 row
+ const rows=[];
+ const defW=PM_COL.def[1]-PM_COL.def[0]-6,corW=PM_COL.cor[1]-PM_COL.cor[0]-6,SZ=7.2,LINE=8.3,MAXL=2; // lines per row
+ faults.forEach(f=>{
+  const dl=pmWrap(font,f.def,SZ,defW),cl=pmWrap(font,f.corr||'',SZ,corW);
+  const n=Math.max(1,Math.ceil(dl.length/MAXL),Math.ceil(cl.length/MAXL));
+  for(let r=0;r<n;r++)rows.push({id:r===0?f.s.id:'',sym:r===0?f.sym:'',def:dl.slice(r*MAXL,r*MAXL+MAXL),cor:cl.slice(r*MAXL,r*MAXL+MAXL),cont:r>0});
+ });
+ const total=rows.length;
+ const pageCount=Math.max(2,1+Math.max(0,Math.ceil((total-14)/28)));   // the printed form is 2 pages; keep both so its own footer stays true
+ // make pages: template has p1 + p2; add copies of p2 as needed
+ let tplP2=null;
+ if(pageCount>2){for(let i=2;i<pageCount;i++){const [c]=await doc.copyPages(doc,[1]);doc.addPage(c);}}
+ const pages=doc.getPages();
+ // renumber page footer
+ if(pageCount>2)pages.forEach((pg,i)=>{
+  pg.drawRectangle({x:524,y:30,width:52,height:9,color:rgb(1,1,1)});
+  pg.drawText('PAGE '+(i+1)+' OF '+pageCount,{x:526,y:31.2,size:8,font:bold,color:rgb(0,0,0)});
+ });
+ // header
+ const p1=pages[0];
+ const put=(k,val,size)=>{const r=PM_HDR[k];if(!r||!val)return;const t=pmAscii(val);let sz=size||9;const w=r[2]-r[0]-2;while(sz>5&&font.widthOfTextAtSize(t,sz)>w)sz-=.5;p1.drawText(t,{x:r[0]+1,y:r[1]+2,size:sz,font,color:ink});};
+ ['org','model','serial','miles','hours','rounds','hot','date','type','tm1','tmd1','tm2','tmd2'].forEach(k=>put(k,a[k]));
+ // 8a printed name, 8b time, 10 manhours (inside taller boxes)
+ const box=(k,val,size)=>{const r=PM_HDR[k];if(!r||!val)return;const t=pmAscii(val);let sz=size||9;const w=r[2]-r[0]-2;while(sz>5&&font.widthOfTextAtSize(t,sz)>w)sz-=.5;p1.drawText(t,{x:r[0]+1,y:r[1]+2,size:sz,font,color:ink});};
+ box('inspector',a.inspector,8);box('time1',a.time1,9);box('mh',a.mh,9);
+ // rows
+ const bounds=[PM_P1,PM_P2];
+ rows.forEach((r,idx)=>{
+  let pi,ri;if(idx<14){pi=0;ri=idx;}else{const k=idx-14;pi=1+Math.floor(k/28);ri=k%28;}
+  const B=pi===0?PM_P1:PM_P2;const top=B[ri],bot=B[ri+1];const pg=pages[pi];
+  if(r.id){let sz=8;while(sz>5&&bold.widthOfTextAtSize(pmAscii(r.id),sz)>(PM_COL.id[1]-PM_COL.id[0]-3))sz-=.5;pg.drawText(pmAscii(r.id),{x:PM_COL.id[0]+2,y:(top+bot)/2-sz/3,size:sz,font:bold,color:ink});}
+  if(r.sym){const cx=(PM_COL.sym[0]+PM_COL.sym[1])/2,cy=(top+bot)/2;
+   if(r.sym==='X'||r.sym==='CX'){const d=6;pg.drawLine({start:{x:cx-d,y:cy-d},end:{x:cx+d,y:cy+d},thickness:1.6,color:ink});pg.drawLine({start:{x:cx-d,y:cy+d},end:{x:cx+d,y:cy-d},thickness:1.6,color:ink});}
+   if(r.sym==='CX')pg.drawEllipse({x:cx,y:cy,xScale:9.5,yScale:9.5,borderColor:ink,borderWidth:1.3});
+   if(r.sym==='/')pg.drawLine({start:{x:cx-7,y:cy-8},end:{x:cx+7,y:cy+8},thickness:1.6,color:ink});
+   if(r.sym==='-')pg.drawLine({start:{x:cx-8,y:cy},end:{x:cx+8,y:cy},thickness:1.6,color:ink});}
+  const draw=(lines,col)=>{const n=lines.length;const h=n*LINE;let y=(top+bot)/2+h/2-SZ+0.8;lines.forEach(l=>{pg.drawText(l,{x:PM_COL[col][0]+3,y,size:SZ,font,color:ink});y-=LINE;});};
+  draw(r.def,'def');draw(r.cor,'cor');
+ });
+ doc.setTitle('DA Form 2404 - '+pmAscii(e.name)+' - '+pmAscii(a.date));
+ doc.setProducer('Engineer Field Reference');
+ const bytes=await doc.save();
+ return {bytes,pages:pageCount,faults:faults.length,rows:total,name:'DA2404_'+e.id.toUpperCase()+'_'+(a.date||pmToday())+'.pdf',admin:a,eq:e};
+}
+
+// ---------- 7. done: download / email ----------
+function pmDone(w){
+ const r=pmPdf,e=r.eq;
+ const d=document.createElement('div');d.className='pm-done';
+ d.innerHTML=`<div class="big">✅</div><div class="pm-title">DA Form 2404 is ready</div><p class="pm-note">${pmEsc(e.name)} · ${r.faults} fault${r.faults===1?'':'s'} · ${r.pages} page${r.pages===1?'':'s'}</p>`;
+ w.appendChild(d);
+ const blob=new Blob([r.bytes],{type:'application/pdf'});
+ const file=(()=>{try{return new File([blob],r.name,{type:'application/pdf'});}catch(x){return null;}})();
+ const dl=document.createElement('button');dl.className='pm-btn';dl.textContent='⬇ Download PDF';
+ dl.onclick=()=>{const u=URL.createObjectURL(blob);const x=document.createElement('a');x.href=u;x.download=r.name;document.body.appendChild(x);x.click();setTimeout(()=>{URL.revokeObjectURL(u);x.remove();},1500);pmNote('Saved to your downloads as '+r.name,true);};
+ w.appendChild(dl);
+ const em=document.createElement('button');em.className='pm-btn sec';em.textContent='✉ Email / share';
+ em.onclick=async()=>{
+  const subj='DA Form 2404 - '+e.name+' - '+r.admin.date;
+  const body='DA Form 2404 for '+e.name+' ('+e.tm+') dated '+r.admin.date+' is attached. '+r.faults+' fault'+(r.faults===1?'':'s')+' recorded.';
+  try{
+   if(file&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:subj,text:body});pmNote('Shared.',true);return;}
+  }catch(x){if(x&&x.name==='AbortError')return;}
+  // fallback: download then open mail client (a link cannot attach files)
+  dl.onclick();
+  const to=r.admin.email||'';
+  setTimeout(()=>{location.href='mailto:'+encodeURIComponent(to).replace(/%40/g,'@')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body+'\n\n(Attach the PDF you just downloaded: '+r.name+')');},600);
+  pmNote('Your device cannot attach files from a web page. The PDF was downloaded — attach it in the email that opens.',true);
+ };
+ w.appendChild(em);
+ const msg=document.createElement('div');msg.id='pmmsg';w.appendChild(msg);
+ if(pmMsg)msg.innerHTML=pmMsg;
+ const open=document.createElement('button');open.className='pm-btn sec';open.textContent='Open / preview PDF';open.onclick=()=>{const u=URL.createObjectURL(blob);window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);};w.appendChild(open);
+ const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Edit equipment data';bk.onclick=()=>pmGo('admin');w.appendChild(bk);
+ const fin=document.createElement('button');fin.className='pm-btn sec';fin.textContent='Finished — clear this inspection';fin.onclick=()=>{if(!confirm('Clear this inspection from the app? Make sure you saved or sent the PDF first.'))return;const a=pmAll();delete a[e.id];lsSet(PM_SESS,a);pmSess=null;pmPdf=null;pmGo('list');};w.appendChild(fin);
+ const nt=document.createElement('p');nt.className='pm-note';nt.textContent='The form is filled from your entries and is unsigned. Faults go to your supervisor / maintenance chain per local SOP; this app does not submit anything.';w.appendChild(nt);
+}
+function pmNote(t,ok){const m=document.getElementById('pmmsg');pmMsg=`<div class="pm-msg${ok?' ok':' err'}">${pmEsc(t)}</div>`;if(m)m.innerHTML=pmMsg;}
+
 // deep link (shareable), else resume where you left off
 (function(){
  let h='';try{h=decodeURIComponent((location.hash||'').slice(1));}catch(e){}
  if(h){
   if(h==='tables'||h==='glossary'){extraSub=h;lsSet('efr-extrasub',h);const tb=document.querySelector('.tab[data-tab="extras"]');if(tb){tb.click();return;}}
-  if(['tools','extras','settings'].includes(h)){const tb=document.querySelector('.tab[data-tab="'+h+'"]');if(tb){tb.click();return;}}
+  if(['tools','extras','settings','pmcs'].includes(h)){const tb=document.querySelector('.tab[data-tab="'+h+'"]');if(tb){tb.click();return;}}
   const e=byId[h];
   if(e){go(e.disc,e.doc,e.sk);const el=document.querySelector('[data-tid="'+e.id.replace(/[^A-Za-z0-9._-]/g,'')+'"]');if(el){if(el.tagName==='DETAILS')el.open=true;el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1700);}return;}
  }
@@ -425,11 +824,6 @@ $('#lyes').onclick=()=>{_leaving=true;$('#leave').hidden=true;history.go(-2);set
  render();
  if(!h && !lsGet('efr-tips-seen',false)) runTips();
 })();
-const TIPS=[
- {i:'&#128269;',t:'Search finds everything',d:'Type in the search box from any tab and get matching tasks, tables, glossary terms, and tools together.'},
- {i:'&#9733;',t:'Star to save',d:'Tap the star on any task to keep it in your Saved list for fast access later.'},
- {i:'&#11015;',t:'Download for offline',d:'From the home screen, tap Offline to save every figure and table so the whole guide works with no signal.'}
-];
 function runTips(){let i=0;function show(){const t=TIPS[i];$('#tipbody').innerHTML=`<div class="ti">${t.i}</div><b>${esc(t.t)}</b><p>${esc(t.d)}</p>`;$('#tipnext').textContent=(i<TIPS.length-1)?'Next':'Got it';$('#tipsheet').hidden=false;guard();}
  $('#tipnext').onclick=()=>{i++;if(i<TIPS.length)show();else{$('#tipsheet').hidden=true;lsSet('efr-tips-seen',true);}};
  show();}
