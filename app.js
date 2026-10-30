@@ -1,4 +1,4 @@
-/* build df45e2cb19 */
+/* build 4c75d624ee */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -16,7 +16,8 @@ function saveLast(){lsSet('efr-last',{disc,man,sec});}
 function makeBackup(){return 'EFR1:'+btoa(unescape(encodeURIComponent(JSON.stringify({v:1,fav:[...fav],recent:recent,last:lsGet('efr-last',null)}))));}
 function applyBackup(str){try{let s=(str||'').trim();if(!s)return false;if(s.indexOf('EFR1:')===0)s=s.slice(5);const o=JSON.parse(decodeURIComponent(escape(atob(s.trim()))));if(Array.isArray(o.fav)){fav=new Set(o.fav.filter(id=>byId[id]));lsSet('efr-fav',[...fav]);}if(Array.isArray(o.recent)){recent=o.recent.filter(id=>byId[id]);lsSet('efr-recent',recent);}if(o.last)lsSet('efr-last',o.last);return true;}catch(e){return false;}}
 try{const t=localStorage.getItem('efr-theme'); if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}
-$('#theme').onclick=()=>{const d=document.documentElement; const cur=d.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'); const nx=cur==='dark'?'light':'dark'; d.setAttribute('data-theme',nx); try{localStorage.setItem('efr-theme',nx);}catch(e){}};
+function getTheme(){try{return localStorage.getItem('efr-theme')||'auto';}catch(e){return 'auto';}}
+function setTheme(v){const d=document.documentElement;if(v==='auto')d.removeAttribute('data-theme');else d.setAttribute('data-theme',v);try{if(v==='auto')localStorage.removeItem('efr-theme');else localStorage.setItem('efr-theme',v);}catch(e){}}
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(m){let el=$('#toast');if(!el){el=document.createElement('div');el.id='toast';el.className='toast';document.body.appendChild(el);}el.textContent=m;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1400);}
 function copyTxt(txt,msg){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>fbCopy(txt,msg));}else fbCopy(txt,msg);}
@@ -221,13 +222,82 @@ const TOOLS=[
   note:'Studs on center for a wall. Add plates, corner/partition posts, and extra studs at openings separately.',
   in:[{k:'L',l:'Wall length (ft)'},{k:'sp',l:'Stud spacing (in)',v:16}],
   out:o=>[['Field studs',fmt(Math.floor(o.L*12/o.sp)+1)],['Then add','plates, corners, openings']]}
+ ,{cat:'Plumbing',name:'Offset pipe length (45° and other angles)',src:'TM 3-34.70 para 6-22, Table 6-2',
+  note:'Offset travel = center-to-center distance A × the Table 6-2 constant for the angle. Then subtract both fitting dimensions and add both engagements to get the pipe length to cut. Enter the fitting dimension and engagement for your pipe size and fitting from the manual (Figures 6-2 and 6-3).',
+  links:[{k:'TM70 Table 6-2',l:'Table 6-2 constants'},{k:'TM70 Figure 6-5',l:'Fig 6-5 offset'}],
+  sel:[{k:'ang',l:'Fitting angle',opts:[['60°',1.1547],['45°',1.4142],['30°',2],['22 1/2°',2.6131],['11 1/4°',5.1258],['5 3/8°',10.217]],v:1.4142}],
+  in:[{k:'A',l:'Center-to-center distance A (in)'},{k:'fd',l:'Fitting dimension, each fitting (in)'},{k:'en',l:'Engagement, each fitting (in)'}],
+  out:o=>{const c=o.A*o.ang;return [['Offset travel (center to center)',fmt(c)+' in'],['Pipe length to cut',fmt(c-2*o.fd+2*o.en)+' in']];}},
+ {cat:'Plumbing',name:'Pipe length between fittings (center-to-center)',src:'TM 3-34.70 para 6-15 to 6-21',
+  note:'Pipe length = center-to-center minus the sum of both fitting dimensions plus the sum of both engagements. Use face-to-face instead by adding each fitting’s engagement to the face-to-face distance.',
+  links:[{k:'TM70 Figure 6-4',l:'Fig 6-4 measuring'}],
+  in:[{k:'cc',l:'Center-to-center (in)'},{k:'f1',l:'Fitting dimension, end 1 (in)'},{k:'f2',l:'Fitting dimension, end 2 (in)'},{k:'e1',l:'Engagement, end 1 (in)'},{k:'e2',l:'Engagement, end 2 (in)'}],
+  out:o=>[['Pipe length',fmt(o.cc-o.f1-o.f2+o.e1+o.e2)+' in']]},
+ {cat:'Plumbing',name:'Simultaneous-use factor and design flow',src:'TM 3-34.70 para 1-20, Table 1-2',
+  note:'Percent of fixtures expected to run at once: 1–5 fixtures = 100 − (fixtures − 1) × 12.75; 6–50 = 50 − (fixtures − 1) × 0.56; 51 or more = 30 percent. Apply it to the total fixture demand in gallons per minute (Table 1-1).',
+  links:[{k:'TM70 Table 1-1',l:'Table 1-1 fixture demand'},{k:'TM70 Table 1-2',l:'Table 1-2 factor'}],
+  in:[{k:'n',l:'Number of fixtures'},{k:'gpm',l:'Total fixture demand (GPM)'}],
+  out:o=>{const n=o.n,p=n<=5?100-(n-1)*12.75:(n<=50?50-(n-1)*0.56:30);return [['Simultaneous use',fmt(p)+' %'],['Design flow',fmt(o.gpm*p/100)+' GPM']];}},
+ {cat:'Plumbing',name:'Pressure and head (psi ↔ feet)',src:'TM 3-34.70 appendix E',
+  note:'P (psi) = 0.433 × H (ft of head); H (ft) = 2.31 × P (psi). A 10-ft head is 4.33 psi. Enter either value.',
+  in:[{k:'h',l:'Head (ft)'},{k:'p',l:'Pressure (psi)'}],
+  out:o=>{const r=[];if(isFinite(o.h))r.push(['Head → pressure',fmt(0.433*o.h)+' psi']);if(isFinite(o.p))r.push(['Pressure → head',fmt(2.31*o.p)+' ft']);return r;}},
+ {cat:'Plumbing',name:'Water heater storage load',src:'TM 3-34.70 para 5-11 to 5-15',
+  note:'Users × maximum hourly use per person × working load. Max use per person per hour: schools 2–3 gal; offices 4–5; barracks/living quarters 8–10. Working load: school/office 25 %, residential 35 %, barracks 40 %. Example: 50 soldiers × 8 gph × 40 % = 160 gal.',
+  in:[{k:'u',l:'Users'},{k:'g',l:'Max hot water per person per hour (gal)'},{k:'w',l:'Working load (%)'}],
+  out:o=>[['Maximum load',fmt(o.u*o.g)+' gal'],['Working load',fmt(o.u*o.g*o.w/100)+' gal']]},
+ {cat:'Plumbing',name:'Subsurface drainage bed length',src:'TM 3-34.70 para 1-85 to 1-89, Table 1-7',
+  note:'Trench-bottom area = daily flow ÷ absorption rate from the percolation test (Table 1-7, GPD per sq ft of trench bottom). Trench length = area ÷ trench width. Round up as the manual directs.',
+  links:[{k:'TM70 Table 1-7',l:'Table 1-7 absorption'}],
+  sel:[{k:'rate',l:'Time for water to fall 1 in.',opts:[['1 min',4],['2 min',3.2],['5 min',2.4],['10 min',1.7],['30 min',0.8],['60 min',0.6]],v:1.7}],
+  in:[{k:'gpd',l:'Daily flow (GPD)'},{k:'w',l:'Trench width (ft)',v:1.5}],
+  out:o=>{const a=o.gpd/o.rate;return [['Trench-bottom area',fmt(a)+' sq ft'],['Trench length',fmt(a/o.w)+' ft']];}},
+ {cat:'Electrical',name:'Ohm’s law calculator (V, A, Ω, W)',src:'Basic DC relationships — watts = volts × amps is in TM 3-34.46 para 8-23; Ohm’s law itself is not printed in the TM',
+  note:'Enter any two of the four values and the other two are worked out: E = I × R and P = E × I (E volts, I amps, R ohms, P watts). For AC loads with a power factor below 1.0, use the single-phase current tool.',
+  in:[{k:'e',l:'Volts (V)'},{k:'i',l:'Amps (A)'},{k:'r',l:'Ohms (Ω)'},{k:'p',l:'Watts (W)'}],
+  out:o=>{let {e,i,r,p}=o;const n=[e,i,r,p].filter(x=>isFinite(x)).length;if(n<2)return [['Enter any two values','']];
+   if(isFinite(e)&&isFinite(i)){r=e/i;p=e*i;}else if(isFinite(e)&&isFinite(r)){i=e/r;p=e*e/r;}else if(isFinite(e)&&isFinite(p)){i=p/e;r=e*e/p;}
+   else if(isFinite(i)&&isFinite(r)){e=i*r;p=i*i*r;}else if(isFinite(i)&&isFinite(p)){e=p/i;r=p/(i*i);}else{e=Math.sqrt(p*r);i=Math.sqrt(p/r);}
+   return [['Volts',fmt(e)+' V'],['Amps',fmt(i)+' A'],['Ohms',fmt(r)+' Ω'],['Watts',fmt(p)+' W']];}},
+ {cat:'Electrical',name:'Branch circuits needed (80 % rule)',src:'TM 3-34.46 para 3-12 to 3-16, Table B-15',
+  note:'Keep each circuit at or under 80 percent of its rating. Circuits = total connected watts ÷ (volts × amps × 0.8), rounded up. Example: 20-A, 120-V = 1,920 W per circuit; 18,000 W needs ten circuits. Do not include special heavy loads such as air conditioners.',
+  in:[{k:'w',l:'Total connected load (W)'},{k:'v',l:'Circuit voltage (V)',v:120},{k:'a',l:'Circuit rating (A)',v:20}],
+  out:o=>{const per=o.v*o.a*0.8;return [['Allowed per circuit',fmt(per)+' W'],['Circuits needed',fmt(Math.ceil(o.w/per-1e-9))]];}},
+ {cat:'Electrical',name:'Connected and demand load',src:'TM 3-34.46 para 3-6 to 3-11, 8-23, Tables 3-1, 8-3, B-14',
+  note:'Add about 20 percent to fluorescent lamp watts for the ballast (two 40-W lamps = 80 W + 16 W = 96 W). Demand load = connected load × demand factor; it never exceeds the connected load. Take demand factors from Table B-14 or Table 8-3 (printed as whole numbers, i.e. tenths).',
+  links:[{k:'TM46 Table B-14',l:'Table B-14 demand'},{k:'TM46 Table 8-3',l:'Table 8-3 factors'},{k:'TM46 Table 3-1',l:'Table 3-1 wattage'}],
+  in:[{k:'inc',l:'Incandescent and other loads (W)',v:0},{k:'fl',l:'Fluorescent lamp watts (before ballast)',v:0},{k:'df',l:'Demand factor (%)',v:100}],
+  out:o=>{const c=(o.inc||0)+(o.fl||0)*1.2;return [['Connected load',fmt(c)+' W'],['Demand load',fmt(c*o.df/100)+' W']];}},
+ {cat:'Electrical',name:'Voltage drop check',src:'TM 3-34.46 para 8-23 (voltage drop)',
+  note:'Voltage drop = sending voltage − receiving voltage, as a percent of the receiving-end voltage (usual). Maximum 5 percent for lighting and power: no more than 3 percent in a branch and 2 percent in a feeder. Example: 231 V sent, 220 V received = 11 V = 5 percent.',
+  in:[{k:'vs',l:'Sending voltage (V)'},{k:'vr',l:'Receiving voltage (V)'}],
+  out:o=>{const d=o.vs-o.vr,p=d/o.vr*100;return [['Drop',fmt(d)+' V'],['% of receiving voltage',fmt(p)+' %'],['% of sending voltage',fmt(d/o.vs*100)+' %'],['Against 5 % limit',p<=5?'Within limit':'Over limit']];}},
+ {cat:'Electrical',name:'Single-phase current from watts',src:'TM 3-34.46 para 8-23 (power factor)',
+  note:'Power factor = true power (watts) ÷ apparent power (volt-amperes), so amps = watts ÷ (volts × power factor). Noninductive loads (lights, heaters) have PF 1.0; induction motors are below 1.0. For DC, watts = volts × amps.',
+  in:[{k:'w',l:'Load (W)'},{k:'v',l:'Voltage (V)',v:120},{k:'pf',l:'Power factor',v:1}],
+  out:o=>[['Apparent power',fmt(o.w/o.pf)+' VA'],['Current',fmt(o.w/(o.v*o.pf))+' A']]},
+ {cat:'Electrical',name:'Line and phase voltage (three-phase)',src:'TM 3-34.46 para 8-16 to 8-22',
+  note:'In a three-phase four-wire system, line voltage = 1.73 × phase voltage (120 V → 208 V; 240 V → 416 V). Enter either value.',
+  in:[{k:'ph',l:'Phase voltage, line to neutral (V)'},{k:'ln',l:'Line voltage, line to line (V)'}],
+  out:o=>{const r=[];if(isFinite(o.ph))r.push(['Line voltage',fmt(1.73*o.ph)+' V']);if(isFinite(o.ln))r.push(['Phase voltage',fmt(o.ln/1.73)+' V']);return r;}},
+ {cat:'Electrical',name:'Copper wire ampacity (raceway or cable)',src:'TM 3-34.46 Tables B-3 and B-7',
+  note:'Allowable current for copper conductors, not more than three in a raceway or cable, by insulation temperature rating (Table B-2). For more than three conductors, reduce by Table B-7: 4–6 = 80 %, 7–24 = 70 %, 25–42 = 60 %, 43+ = 50 %. Ambient over 86 °F also needs correction factors — see Table B-3.',
+  links:[{k:'TM46 Table B-3',l:'Table B-3 ampacity'},{k:'TM46 Table B-2',l:'Table B-2 insulation'},{k:'TM46 Table B-7',l:'Table B-7 derating'}],
+  sel:[{k:'sz',l:'Wire size (AWG)',opts:[['14',0],['12',1],['10',2],['8',3],['6',4],['4',5],['3',6],['2',7],['1',8],['1/0',9],['2/0',10],['3/0',11],['4/0',12]],v:1},
+       {k:'col',l:'Insulation rating',opts:[['60 °C (140 °F)',0],['75 °C (167 °F)',1],['85–90 °C (185 °F)',2]],v:0},
+       {k:'cnd',l:'Conductors in raceway or cable',opts:[['1–3',1],['4–6 (80 %)',0.8],['7–24 (70 %)',0.7],['25–42 (60 %)',0.6],['43 or more (50 %)',0.5]],v:1}],
+  out:o=>{const T=[[15,15,25],[20,20,30],[30,30,40],[40,45,50],[55,65,70],[70,85,90],[80,100,105],[95,115,120],[110,130,140],[125,150,155],[145,175,185],[165,200,210],[195,230,235]];const a=T[o.sz][o.col];return [['Table value',a+' A'],['After derating',fmt(a*o.cnd)+' A']];}},
+ {cat:'Electrical',name:'Conduit inner bend radius',src:'TM 3-34.46 para 5-2 (rigid conduit)',
+  note:'Inner bend radius at least 6 × the conduit’s inside diameter (10 × for lead-covered conductors). No more than four quarter bends between openings.',
+  in:[{k:'id',l:'Conduit inside diameter (in)'}],
+  out:o=>[['Minimum inner radius',fmt(6*o.id)+' in'],['Lead-covered conductors',fmt(10*o.id)+' in']]}
 ];
 function fmt(n){return (!isFinite(n))?'—':(Math.round(n*100)/100).toLocaleString();}
 let toolMem=lsGet('efr-toolmem',{});
 function memGet(key,k,dflt){const m=toolMem[key];return (m&&m[k]!=null)?m[k]:dflt;}
 function memSet(key,k,v){const m=toolMem[key]||(toolMem[key]={});m[k]=v;lsSet('efr-toolmem',toolMem);}
 function toolCard(t){
- const d=document.createElement('details');d.className='card tool';d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':'#2f7d6b');
+ const d=document.createElement('details');d.className='card tool';d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':t.cat==='Plumbing'?'#3f6fa0':t.cat==='Electrical'?'#c9a227':'#2f7d6b');
  if(t.equip){
   const keys=Object.keys(t.equip);
   d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><label class="tin"><span>Equipment</span><select data-eq>${keys.map(k=>`<option value="${k}">${esc(t.equip[k].name)}</option>`).join('')}</select></label><div class="eqbody"></div></div>`;
@@ -246,12 +316,14 @@ function toolCard(t){
   sel.addEventListener('change',buildEq);d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)buildEq();});
   return d;
  }
- const ins=t.in.map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${memGet(t.name,f.k,f.v!=null?f.v:'')}"></label>`).join('');
+ const sels=(t.sel||[]).map(s=>`<label class="tin"><span>${esc(s.l)}</span><select data-k="${s.k}">${s.opts.map(o=>`<option value="${o[1]}">${esc(o[0])}</option>`).join('')}</select></label>`).join('');
+ const ins=(t.in||[]).map(f=>`<label class="tin"><span>${esc(f.l)}</span><input type="number" inputmode="decimal" step="any" data-k="${f.k}" value="${memGet(t.name,f.k,f.v!=null?f.v:'')}"></label>`).join('');
  const glk=(t.links||[]).map(x=>`<button type="button" class="ref chartlink" data-k="${esc(x.k)}" data-l="${esc(x.l)}">${esc(x.l)}</button>`).join('');
- d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p>${glk?`<div class="chartlinks">${glk}</div>`:''}<div class="tins">${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
+ d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p>${glk?`<div class="chartlinks">${glk}</div>`:''}<div class="tins">${sels}${ins}</div><div class="touts"></div><div class="src">Source: ${esc(t.src)}</div></div>`;
+ (t.sel||[]).forEach(s=>{const el=d.querySelector(`select[data-k="${s.k}"]`);const sv=memGet(t.name,s.k,null);el.value=sv!=null?sv:s.v;});
  const outs=d.querySelector('.touts');
- function calc(){const o={};d.querySelectorAll('input[data-k]').forEach(x=>{o[x.dataset.k]=parseFloat(x.value);memSet(t.name,x.dataset.k,x.value);});let rows;try{rows=t.out(o)||[];}catch(e){rows=[];}outs.innerHTML=rows.map(r=>`<div class="tout"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
- d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)calc();});
+ function calc(){const o={};d.querySelectorAll('input[data-k],select[data-k]').forEach(x=>{o[x.dataset.k]=parseFloat(x.value);memSet(t.name,x.dataset.k,x.value);});let rows;try{rows=t.out(o)||[];}catch(e){rows=[];}outs.innerHTML=rows.map(r=>`<div class="tout"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
+ d.addEventListener('input',calc);d.addEventListener('change',calc);d.addEventListener('toggle',()=>{if(d.open)calc();});
  return d;
 }
 function render(){
@@ -281,7 +353,6 @@ function render(){
     const sc=document.createElement('div');sc.className='shortcuts';
     if(fav.size){const b=document.createElement('button');b.className='scut';b.style.setProperty('--dc','#c9a227');b.innerHTML=`<span class="si">&#9733;</span><span class="sl">Saved</span><span class="sn">${fav.size}</span>`;b.onclick=()=>goSpecial('saved');sc.appendChild(b);}
     if(recent.length){const b=document.createElement('button');b.className='scut';b.style.setProperty('--dc','#6a6a5a');b.innerHTML=`<span class="si">&#8635;</span><span class="sl">Recent</span><span class="sn">${recent.length}</span>`;b.onclick=()=>goSpecial('recent');sc.appendChild(b);}
-    const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Download TMs for offline use</span><span class="sn">&rsaquo;</span>`;ob.onclick=openOffline;sc.appendChild(ob);
     frag.appendChild(sc);
    }
    const h=document.createElement('div');h.className='idxhead';h.textContent='Choose a discipline:';h.style.marginTop='4px';frag.appendChild(h);
@@ -322,9 +393,9 @@ function render(){
  } else if(tab==='pmcs'){
   renderPmcs(frag);
  } else if(tab==='tools'){
-  countEl.textContent='Field tools — converter & production estimates';
+  countEl.textContent='Field tools — converter, estimates, plumbing & electrical';
   const ch=document.createElement('div');ch.className='idxhead toolcat first';ch.textContent='Unit converter';frag.appendChild(ch);frag.appendChild(makeConverter());
-  ['Horizontal','Vertical'].forEach((cat)=>{const h=document.createElement('div');h.className='idxhead toolcat';h.textContent=cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
+  ['Horizontal','Vertical','Plumbing','Electrical'].forEach((cat)=>{const h=document.createElement('div');h.className='idxhead toolcat';h.textContent=cat==='Plumbing'?'Plumbing (TM 3-34.70)':cat==='Electrical'?'Electrical (TM 3-34.46)':cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
   const n=document.createElement('p');n.className='src';n.style.margin='16px 2px';n.textContent='These follow the formulas in the referenced manuals. Enter the job factors (swell, shrinkage, efficiency, mix, waste) from your manual — the tool does the math. Verify critical estimates against the source.';frag.appendChild(n);
  } else if(tab==='extras'){
   const sub=document.createElement('div');sub.className='srow';
@@ -346,7 +417,13 @@ function render(){
   }
  } else if(tab==='settings'){
   countEl.textContent='Settings';
+  const th=document.createElement('div');th.className='idxhead toolcat first';th.textContent='Appearance';frag.appendChild(th);
+  const tr=document.createElement('div');tr.className='srow';
+  [['auto','Match device'],['light','Light'],['dark','Dark']].forEach(([k,l])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',getTheme()===k?'true':'false');b.textContent=l;b.onclick=()=>{setTheme(k);render();};tr.appendChild(b);});
+  frag.appendChild(tr);
+  const oh=document.createElement('div');oh.className='idxhead toolcat';oh.textContent='Data';frag.appendChild(oh);
   const sc=document.createElement('div');sc.className='shortcuts';
+  const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Offline copy</span><span class="sn">${lsGet('efr-offline',null)?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
   const bb=document.createElement('button');bb.className='scut';bb.style.setProperty('--dc','#5a7d5a');bb.innerHTML=`<span class="si">&#128190;</span><span class="sl">Back up / restore</span><span class="sn">&rsaquo;</span>`;bb.onclick=openBackup;sc.appendChild(bb);
   frag.appendChild(sc);
   const n=document.createElement('p');n.className='src';n.style.margin='4px 2px 0';n.textContent='Your favorites, recents, and last position are stored only in this browser. Back them up before clearing your browser or switching devices.';frag.appendChild(n);
@@ -435,7 +512,7 @@ $('#lyes').onclick=()=>{_leaving=true;$('#leave').hidden=true;history.go(-2);set
 const TIPS=[
  {i:'&#128269;',t:'Search finds everything',d:'Type in the search box from any tab and get matching tasks, tables, glossary terms, and tools together.'},
  {i:'&#9733;',t:'Star to save',d:'Tap the star on any task to keep it in your Saved list for fast access later.'},
- {i:'&#11015;',t:'Download for offline',d:'From the home screen, tap Offline to save every figure and table so the whole guide works with no signal.'}
+ {i:'&#11015;',t:'Saves itself for offline',d:'On Wi-Fi the app quietly saves every figure and table so the whole guide works with no signal. Check status on the home screen or in Settings.'}
 ];
 
 // ================= PMCS module: guided PMCS -> faults -> DA Form 2404 =================
