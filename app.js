@@ -1,4 +1,4 @@
-/* build 4c75d624ee */
+/* build 20cba88e33 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -53,7 +53,7 @@ function hay(o){return [o.n,o.c,o.desc,o.use,o.how,o.dim,o.eq,o.tm,o.pr,o.wn,o.s
 const MAN_ORDER_JS=DATA.manOrder||[];
 function trustLine(){
  const el=document.createElement('div');el.className='trust';
- const off=lsGet('efr-offline',null);
+ const off=offState();
  el.innerHTML=(off?`<span class="tstat ok">&#10003; Offline ready</span>`:`<span class="tstat">Not yet saved offline &mdash; </span>`)+
   (off?'':`<a style="color:var(--accent-ink);font-weight:700;cursor:pointer" id="trustoff">download for offline</a>`)+
   `<span> &middot; Guide updated ${esc(DATA.build||'')}</span>`;
@@ -233,12 +233,12 @@ const TOOLS=[
   links:[{k:'TM70 Figure 6-4',l:'Fig 6-4 measuring'}],
   in:[{k:'cc',l:'Center-to-center (in)'},{k:'f1',l:'Fitting dimension, end 1 (in)'},{k:'f2',l:'Fitting dimension, end 2 (in)'},{k:'e1',l:'Engagement, end 1 (in)'},{k:'e2',l:'Engagement, end 2 (in)'}],
   out:o=>[['Pipe length',fmt(o.cc-o.f1-o.f2+o.e1+o.e2)+' in']]},
- {cat:'Plumbing',name:'Simultaneous-use factor and design flow',src:'TM 3-34.70 para 1-20, Table 1-2',
+ {cat:'Plumbing',name:'Simultaneous-use factor and design flow',src:'TM 3-34.70 para 1-20 to 1-23, Table 1-2',
   note:'Percent of fixtures expected to run at once: 1–5 fixtures = 100 − (fixtures − 1) × 12.75; 6–50 = 50 − (fixtures − 1) × 0.56; 51 or more = 30 percent. Apply it to the total fixture demand in gallons per minute (Table 1-1).',
   links:[{k:'TM70 Table 1-1',l:'Table 1-1 fixture demand'},{k:'TM70 Table 1-2',l:'Table 1-2 factor'}],
   in:[{k:'n',l:'Number of fixtures'},{k:'gpm',l:'Total fixture demand (GPM)'}],
   out:o=>{const n=o.n,p=n<=5?100-(n-1)*12.75:(n<=50?50-(n-1)*0.56:30);return [['Simultaneous use',fmt(p)+' %'],['Design flow',fmt(o.gpm*p/100)+' GPM']];}},
- {cat:'Plumbing',name:'Pressure and head (psi ↔ feet)',src:'TM 3-34.70 appendix E',
+ {cat:'Plumbing',name:'Pressure and head (psi ↔ feet)',src:'TM 3-34.70 appendix E (E-1 to E-5)',
   note:'P (psi) = 0.433 × H (ft of head); H (ft) = 2.31 × P (psi). A 10-ft head is 4.33 psi. Enter either value.',
   in:[{k:'h',l:'Head (ft)'},{k:'p',l:'Pressure (psi)'}],
   out:o=>{const r=[];if(isFinite(o.h))r.push(['Head → pressure',fmt(0.433*o.h)+' psi']);if(isFinite(o.p))r.push(['Pressure → head',fmt(2.31*o.p)+' ft']);return r;}},
@@ -252,7 +252,7 @@ const TOOLS=[
   sel:[{k:'rate',l:'Time for water to fall 1 in.',opts:[['1 min',4],['2 min',3.2],['5 min',2.4],['10 min',1.7],['30 min',0.8],['60 min',0.6]],v:1.7}],
   in:[{k:'gpd',l:'Daily flow (GPD)'},{k:'w',l:'Trench width (ft)',v:1.5}],
   out:o=>{const a=o.gpd/o.rate;return [['Trench-bottom area',fmt(a)+' sq ft'],['Trench length',fmt(a/o.w)+' ft']];}},
- {cat:'Electrical',name:'Ohm’s law calculator (V, A, Ω, W)',src:'Basic DC relationships — watts = volts × amps is in TM 3-34.46 para 8-23; Ohm’s law itself is not printed in the TM',
+ {cat:'Electrical',name:'Ohm’s law calculator (V, A, Ω, W)',src:'Basic DC relationships — watts = volts × amps is in TM 3-34.46 para 8-23, 8-24; Ohm’s law itself is not printed in the TM',
   note:'Enter any two of the four values and the other two are worked out: E = I × R and P = E × I (E volts, I amps, R ohms, P watts). For AC loads with a power factor below 1.0, use the single-phase current tool.',
   in:[{k:'e',l:'Volts (V)'},{k:'i',l:'Amps (A)'},{k:'r',l:'Ohms (Ω)'},{k:'p',l:'Watts (W)'}],
   out:o=>{let {e,i,r,p}=o;const n=[e,i,r,p].filter(x=>isFinite(x)).length;if(n<2)return [['Enter any two values','']];
@@ -263,16 +263,16 @@ const TOOLS=[
   note:'Keep each circuit at or under 80 percent of its rating. Circuits = total connected watts ÷ (volts × amps × 0.8), rounded up. Example: 20-A, 120-V = 1,920 W per circuit; 18,000 W needs ten circuits. Do not include special heavy loads such as air conditioners.',
   in:[{k:'w',l:'Total connected load (W)'},{k:'v',l:'Circuit voltage (V)',v:120},{k:'a',l:'Circuit rating (A)',v:20}],
   out:o=>{const per=o.v*o.a*0.8;return [['Allowed per circuit',fmt(per)+' W'],['Circuits needed',fmt(Math.ceil(o.w/per-1e-9))]];}},
- {cat:'Electrical',name:'Connected and demand load',src:'TM 3-34.46 para 3-6 to 3-11, 8-23, Tables 3-1, 8-3, B-14',
+ {cat:'Electrical',name:'Connected and demand load',src:'TM 3-34.46 para 3-6 to 3-11, 8-23, 8-24; Tables 3-1, 8-3, B-14',
   note:'Add about 20 percent to fluorescent lamp watts for the ballast (two 40-W lamps = 80 W + 16 W = 96 W). Demand load = connected load × demand factor; it never exceeds the connected load. Take demand factors from Table B-14 or Table 8-3 (printed as whole numbers, i.e. tenths).',
   links:[{k:'TM46 Table B-14',l:'Table B-14 demand'},{k:'TM46 Table 8-3',l:'Table 8-3 factors'},{k:'TM46 Table 3-1',l:'Table 3-1 wattage'}],
   in:[{k:'inc',l:'Incandescent and other loads (W)',v:0},{k:'fl',l:'Fluorescent lamp watts (before ballast)',v:0},{k:'df',l:'Demand factor (%)',v:100}],
   out:o=>{const c=(o.inc||0)+(o.fl||0)*1.2;return [['Connected load',fmt(c)+' W'],['Demand load',fmt(c*o.df/100)+' W']];}},
- {cat:'Electrical',name:'Voltage drop check',src:'TM 3-34.46 para 8-23 (voltage drop)',
+ {cat:'Electrical',name:'Voltage drop check',src:'TM 3-34.46 para 8-23, 8-24',
   note:'Voltage drop = sending voltage − receiving voltage, as a percent of the receiving-end voltage (usual). Maximum 5 percent for lighting and power: no more than 3 percent in a branch and 2 percent in a feeder. Example: 231 V sent, 220 V received = 11 V = 5 percent.',
   in:[{k:'vs',l:'Sending voltage (V)'},{k:'vr',l:'Receiving voltage (V)'}],
   out:o=>{const d=o.vs-o.vr,p=d/o.vr*100;return [['Drop',fmt(d)+' V'],['% of receiving voltage',fmt(p)+' %'],['% of sending voltage',fmt(d/o.vs*100)+' %'],['Against 5 % limit',p<=5?'Within limit':'Over limit']];}},
- {cat:'Electrical',name:'Single-phase current from watts',src:'TM 3-34.46 para 8-23 (power factor)',
+ {cat:'Electrical',name:'Single-phase current from watts',src:'TM 3-34.46 para 8-23, 8-24 (power factor)',
   note:'Power factor = true power (watts) ÷ apparent power (volt-amperes), so amps = watts ÷ (volts × power factor). Noninductive loads (lights, heaters) have PF 1.0; induction motors are below 1.0. For DC, watts = volts × amps.',
   in:[{k:'w',l:'Load (W)'},{k:'v',l:'Voltage (V)',v:120},{k:'pf',l:'Power factor',v:1}],
   out:o=>[['Apparent power',fmt(o.w/o.pf)+' VA'],['Current',fmt(o.w/(o.v*o.pf))+' A']]},
@@ -281,13 +281,13 @@ const TOOLS=[
   in:[{k:'ph',l:'Phase voltage, line to neutral (V)'},{k:'ln',l:'Line voltage, line to line (V)'}],
   out:o=>{const r=[];if(isFinite(o.ph))r.push(['Line voltage',fmt(1.73*o.ph)+' V']);if(isFinite(o.ln))r.push(['Phase voltage',fmt(o.ln/1.73)+' V']);return r;}},
  {cat:'Electrical',name:'Copper wire ampacity (raceway or cable)',src:'TM 3-34.46 Tables B-3 and B-7',
-  note:'Allowable current for copper conductors, not more than three in a raceway or cable, by insulation temperature rating (Table B-2). For more than three conductors, reduce by Table B-7: 4–6 = 80 %, 7–24 = 70 %, 25–42 = 60 %, 43+ = 50 %. Ambient over 86 °F also needs correction factors — see Table B-3.',
+  note:'Allowable current for copper conductors, not more than three in a raceway or cable, by insulation temperature rating (Table B-2). For more than three conductors, reduce by Table B-7: 4–6 = 80 %, 7–24 = 70 %, 25–42 = 60 %, 43+ = 50 %. Ambient over 86 °F also needs correction factors — see Table B-3. Footnote 2: for types FEP, FEPB, PHH and THHN in sizes 14, 12 and 10, use the 75 °C values.',
   links:[{k:'TM46 Table B-3',l:'Table B-3 ampacity'},{k:'TM46 Table B-2',l:'Table B-2 insulation'},{k:'TM46 Table B-7',l:'Table B-7 derating'}],
   sel:[{k:'sz',l:'Wire size (AWG)',opts:[['14',0],['12',1],['10',2],['8',3],['6',4],['4',5],['3',6],['2',7],['1',8],['1/0',9],['2/0',10],['3/0',11],['4/0',12]],v:1},
        {k:'col',l:'Insulation rating',opts:[['60 °C (140 °F)',0],['75 °C (167 °F)',1],['85–90 °C (185 °F)',2]],v:0},
        {k:'cnd',l:'Conductors in raceway or cable',opts:[['1–3',1],['4–6 (80 %)',0.8],['7–24 (70 %)',0.7],['25–42 (60 %)',0.6],['43 or more (50 %)',0.5]],v:1}],
-  out:o=>{const T=[[15,15,25],[20,20,30],[30,30,40],[40,45,50],[55,65,70],[70,85,90],[80,100,105],[95,115,120],[110,130,140],[125,150,155],[145,175,185],[165,200,210],[195,230,235]];const a=T[o.sz][o.col];return [['Table value',a+' A'],['After derating',fmt(a*o.cnd)+' A']];}},
- {cat:'Electrical',name:'Conduit inner bend radius',src:'TM 3-34.46 para 5-2 (rigid conduit)',
+  out:o=>{const T=[[15,15,25],[20,20,30],[30,30,40],[40,45,50],[55,65,70],[70,85,90],[80,100,105],[95,115,120],[110,130,140],[125,150,155],[145,175,185],[165,200,210],[195,230,235]];const a=T[o.sz][o.col];const r=[['Table value',a+' A'],['After derating',fmt(a*o.cnd)+' A']];if(o.col===2&&o.sz<=2){const q=T[o.sz][1];r.push(['If THHN, FEP, FEPB or PHH','use 75 °C value: '+q+' A ('+fmt(q*o.cnd)+' A derated)']);}return r;}},
+ {cat:'Electrical',name:'Conduit inner bend radius',src:'TM 3-34.46 para 5-14 to 5-21',
   note:'Inner bend radius at least 6 × the conduit’s inside diameter (10 × for lead-covered conductors). No more than four quarter bends between openings.',
   in:[{k:'id',l:'Conduit inside diameter (in)'}],
   out:o=>[['Minimum inner radius',fmt(6*o.id)+' in'],['Lead-covered conductors',fmt(10*o.id)+' in']]}
@@ -423,7 +423,7 @@ function render(){
   frag.appendChild(tr);
   const oh=document.createElement('div');oh.className='idxhead toolcat';oh.textContent='Data';frag.appendChild(oh);
   const sc=document.createElement('div');sc.className='shortcuts';
-  const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Offline copy</span><span class="sn">${lsGet('efr-offline',null)?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
+  const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Offline copy</span><span class="sn">${offState()?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
   const bb=document.createElement('button');bb.className='scut';bb.style.setProperty('--dc','#5a7d5a');bb.innerHTML=`<span class="si">&#128190;</span><span class="sl">Back up / restore</span><span class="sn">&rsaquo;</span>`;bb.onclick=openBackup;sc.appendChild(bb);
   frag.appendChild(sc);
   const n=document.createElement('p');n.className='src';n.style.margin='4px 2px 0';n.textContent='Your favorites, recents, and last position are stored only in this browser. Back them up before clearing your browser or switching devices.';frag.appendChild(n);
@@ -455,17 +455,25 @@ $('#ccopy').onclick=async()=>{const em='Dylan.W.Lundquist.Mil@army.mil';try{awai
 function setBsta(msg,ok){const el=$('#bsta');el.textContent=msg||'';el.className='bsta'+(msg?(ok?' ok':' err'):'');}
 function openBackup(){$('#csheet').hidden=true;try{$('#bcode').value=makeBackup();}catch(e){$('#bcode').value='';}$('#brest').value='';setBsta('');$('#bsheet').hidden=false;guard();}
 function setOsta(m,ok){const el=$('#osta');el.textContent=m||'';el.className='bsta'+(m?(ok?' ok':' err'):'');}
-function openOffline(){$('#csheet').hidden=true;const o=lsGet('efr-offline',null);setOsta(o?('All '+o.n+' figures & tables saved for offline use ✓'):'',true);$('#odl').textContent=o?'Refresh offline copy':'Download all for offline';$('#oprog').hidden=true;$('#obarfill').style.width='0%';$('#opct').textContent='0%';$('#osheet').hidden=false;guard();}
+function openOffline(){$('#csheet').hidden=true;const o=offState();setOsta(o?('All '+o.n+' figures & tables saved for offline use ✓'):'',true);$('#odl').textContent=o?'Refresh offline copy':'Download all for offline';$('#oprog').hidden=true;$('#obarfill').style.width='0%';$('#opct').textContent='0%';$('#osheet').hidden=false;guard();}
 $('#oclose').onclick=()=>{$('#osheet').hidden=true;};
 $('#osheet').addEventListener('click',e=>{if(e.target.id==='osheet')$('#osheet').hidden=true;});
 let offBusy=false;
 function paintTrust(txt,ok){document.querySelectorAll('.trust .tstat').forEach(el=>{el.textContent=txt;if(ok!==undefined)el.className='tstat'+(ok?' ok':'');});const l=document.querySelector('.trust #trustoff');if(l&&ok)l.remove();}
+let _dg=null;function imgDigest(){if(_dg)return _dg;let h=5381;const s=Object.values(DATA.images).join('|');for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;_dg=String(h>>>0);return _dg;}
+function offState(){const o=lsGet('efr-offline',null);return (o&&o.d===imgDigest())?o:null;}
 async function offlineRun(onp){
  if(offBusy)return false;offBusy=true;
  const urls=Object.values(DATA.images),total=urls.length;let done=0,i=0,cache=null;
  try{cache=await caches.open('efr-images-v1');}catch(e){}
  async function worker(){while(i<urls.length){const u=urls[i++];try{if(cache){const hit=await cache.match(u);if(!hit){const r=await fetch(u,{cache:'reload'});if(r&&r.ok)await cache.put(u,r.clone());}}else{await fetch(u);}}catch(e){}done++;if(onp)onp(total?Math.round(done/total*100):100);}}
- try{await Promise.all([0,0,0,0,0,0].map(worker));lsSet('efr-offline',{n:total,ts:Date.now()});offBusy=false;return total;}
+ try{await Promise.all([0,0,0,0,0,0].map(worker));
+  let missing=0;
+  if(cache){try{const want=new Set(urls.map(u=>new URL(u,location.href).href));
+   for(const u of urls){if(!(await cache.match(u)))missing++;}
+   if(!missing){for(const rq of await cache.keys()){if(!want.has(rq.url))await cache.delete(rq);}}}catch(e){}}
+  if(missing){offBusy=false;return false;}
+  lsSet('efr-offline',{n:total,d:imgDigest(),ts:Date.now()});offBusy=false;return total;}
  catch(e){offBusy=false;return false;}}
 $('#odl').onclick=async()=>{const b=$('#odl');b.disabled=true;$('#oprog').hidden=false;setOsta('');
  const upd=p=>{$('#obarfill').style.width=p+'%';$('#opct').textContent=p+'%';paintTrust('Saving for offline… '+p+'%');};
@@ -477,7 +485,7 @@ $('#odl').onclick=async()=>{const b=$('#odl');b.disabled=true;$('#oprog').hidden
 function autoOffline(){try{
  if(!/^https?:$/.test(location.protocol)||!('caches' in window))return;
  const urls=Object.values(DATA.images);if(!urls.length||String(urls[0]).startsWith('data:'))return;
- const o=lsGet('efr-offline',null);if(o&&o.n===urls.length)return;
+ const o=lsGet('efr-offline',null);if(o&&o.n===urls.length&&o.d===imgDigest())return;
  const c=navigator.connection;if(c&&(c.saveData||c.type==='cellular'))return;
  setTimeout(async()=>{if(!navigator.onLine)return;
   const n=await offlineRun(p=>paintTrust('Saving for offline… '+p+'%'));
