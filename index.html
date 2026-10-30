@@ -352,11 +352,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div>
 <script>
 (function(){
- var V='23abce53d7';
- fetch('content.json').then(function(r){return r.json();}).then(function(d){
+ var V='dd6c47a08d';
+ // ?v= ties content.json + app.js to THIS page's build, so a cached old script can never
+ // run under a new page (the SW strips ?v= for its offline copy, so offline still works)
+ fetch('content.json?v='+V,{cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
    window.__DATA__=d;
    var b=document.getElementById('boot'); if(b) b.remove();
-   var s=document.createElement('script'); s.src='app.js'; document.body.appendChild(s);
+   var s=document.createElement('script'); s.src='app.js?v='+V; document.body.appendChild(s);
  }).catch(function(e){
    var b=document.getElementById('boot');
    if(b) b.innerHTML='Could not load the guide. Check your connection and reopen the app.';

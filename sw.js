@@ -1,11 +1,13 @@
-/* Engineer Field Reference service worker - build 23abce53d7 */
-const VER='23abce53d7';
+/* Engineer Field Reference service worker - build dd6c47a08d */
+const VER='dd6c47a08d';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
 const CORE=["./", "index.html", "app.js", "content.json", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install',e=>{
-  e.waitUntil(caches.open(SHELL).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
+  // cache:'reload' bypasses the browser HTTP cache so a new SW never precaches stale files
+  e.waitUntil(caches.open(SHELL).then(c=>c.addAll(CORE.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting()));
 });
+function bare(u){return u.origin+u.pathname;}
 self.addEventListener('activate',e=>{
   e.waitUntil((async()=>{
     const keys=await caches.keys();
@@ -31,16 +33,17 @@ self.addEventListener('fetch',e=>{
   // navigations: network-first, fall back to the cached app shell when offline
   if(req.mode==='navigate'){
     e.respondWith((async()=>{
-      try{ const res=await fetch(req); if(res&&res.ok){const c=await caches.open(SHELL);c.put('index.html',res.clone());} return res; }
+      try{ const res=await fetch(req.url,{cache:'no-cache',credentials:'same-origin'}); if(res&&res.ok){const c=await caches.open(SHELL);c.put('index.html',res.clone());} return res; }
       catch(err){ const c=await caches.open(SHELL); return (await c.match('index.html'))||(await c.match('./'))||Response.error(); }
     })());
     return;
   }
-  // shell assets (app.js, content.json, manifest, icons): network-first, fall back to the
-  // SAME cached resource when offline -- never return the HTML shell for a script/json request
+  // shell assets (app.js, content.json, manifest, icons): network-first with the HTTP cache
+  // bypassed (no-cache), stored under the bare path; offline falls back to the SAME resource
+  // -- never the HTML shell for a script/json request
   e.respondWith((async()=>{
     const c=await caches.open(SHELL);
-    try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }
-    catch(err){ const hit=await c.match(req,{ignoreSearch:true}); return hit||Response.error(); }
+    try{ const res=await fetch(req,{cache:'no-cache'}); if(res&&res.ok) c.put(bare(url),res.clone()); return res; }
+    catch(err){ const hit=(await c.match(bare(url)))||(await c.match(req,{ignoreSearch:true})); return hit||Response.error(); }
   })());
 });
