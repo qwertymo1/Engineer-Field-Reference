@@ -1,5 +1,5 @@
-/* Engineer Field Reference service worker - build 20cba88e33 */
-const VER='20cba88e33';
+/* Engineer Field Reference service worker - build 8ebf3c87e0 */
+const VER='8ebf3c87e0';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
 const CORE=["./", "index.html", "app.js", "content.json", "pmcs.json", "pdf-lib.min.js", "da2404-blank.pdf", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];

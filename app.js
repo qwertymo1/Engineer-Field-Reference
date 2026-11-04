@@ -1,9 +1,12 @@
-/* build 20cba88e33 */
+/* build 8ebf3c87e0 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
 let tab='guide', disc=null, man=null, sec='ALL', q='', special=null;
 let extraSub=lsGet('efr-extrasub','tables');
+let toolSub=lsGet('efr-toolsub','Horizontal'),openTool=null;
+const TOOL_CATS=[['Horizontal','Horizontal'],['Vertical','Vertical'],['Plumbing','Plumbing'],['Electrical','Electrical']];
+const TOOL_SRC={Plumbing:'From TM 3-34.70, Plumbing, Pipe Fitting & Sewerage',Electrical:'From TM 3-34.46, Theater of Operations Electrical Systems'};
 const MANFULL={}; DATA.disciplines.forEach(d=>d.mans.forEach(m=>{MANFULL[m.k]={name:m.name,full:m.full};}));
 const byId={}; DATA.entries.forEach(e=>{byId[e.id]=e;});
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
@@ -96,13 +99,13 @@ function renderGlobalSearch(frag){
  const terms=DATA.glossary.filter(g=>(g.t+' '+g.d).toLowerCase().includes(q));
  const toolHits=[];
  TOOLS.forEach(t=>{
-  if((t.name+' '+(t.note||'')).toLowerCase().includes(q)) toolHits.push(t.name);
-  if(t.equip) Object.values(t.equip).forEach(e=>{if((e.name+' '+(e.note||'')).toLowerCase().includes(q)) toolHits.push('Equipment production — '+e.name);});
+  if((t.name+' '+(t.note||'')).toLowerCase().includes(q)) toolHits.push({l:t.name,t:t});
+  if(t.equip) Object.entries(t.equip).forEach(([k,e])=>{if((e.name+' '+(e.note||'')).toLowerCase().includes(q)) toolHits.push({l:'Equipment production — '+e.name,t:t,eq:k});});
  });
  const total=tasks.length+tbls.length+terms.length+toolHits.length;
  countEl.textContent=total+' result'+(total===1?'':'s')+' for "'+q+'"';
  if(!total){const x=document.createElement('div');x.className='empty';x.textContent='No matches. Try different words.';frag.appendChild(x);return;}
- const goTools=()=>{tab='tools';document.querySelectorAll('.tab').forEach(xx=>xx.setAttribute('aria-selected',xx.dataset.tab==='tools'?'true':'false'));q='';$('#q').value='';$('#qx').style.display='none';render();window.scrollTo(0,0);};
+ const goTools=(h)=>{if(h&&h.t){if(h.t.cat!=='Fuel'){toolSub=h.t.cat;lsSet('efr-toolsub',toolSub);}openTool=h.t.name;if(h.eq)memSet(h.t.name,'_eq',h.eq);}tab='tools';document.querySelectorAll('.tab').forEach(xx=>xx.setAttribute('aria-selected',xx.dataset.tab==='tools'?'true':'false'));q='';$('#q').value='';$('#qx').style.display='none';render();window.scrollTo(0,0);};
  if(tasks.length){const h=document.createElement('div');h.className='srchgrp first';h.textContent='Tasks & topics ('+tasks.length+')';frag.appendChild(h);
   tasks.slice(0,50).forEach(e=>frag.appendChild(entryEl(e)));}
  if(tbls.length){const h=document.createElement('div');h.className='srchgrp';h.textContent='Tables & figures ('+tbls.length+')';frag.appendChild(h);
@@ -110,7 +113,7 @@ function renderGlobalSearch(frag){
  if(terms.length){const h=document.createElement('div');h.className='srchgrp';h.textContent='Glossary ('+terms.length+')';frag.appendChild(h);
   terms.slice(0,30).forEach(g=>{const el=document.createElement('div');el.className='srchterm';el.innerHTML=`<span style="font-weight:700;color:var(--accent-ink)">${esc(g.t)}</span> &mdash; ${esc(g.d)}`;frag.appendChild(el);});}
  if(toolHits.length){const h=document.createElement('div');h.className='srchgrp';h.textContent='Tools ('+toolHits.length+')';frag.appendChild(h);
-  toolHits.forEach(name=>{const b=document.createElement('button');b.className='srchtool';b.textContent=name;b.onclick=goTools;frag.appendChild(b);});}
+  toolHits.forEach(h=>{const b=document.createElement('button');b.className='srchtool';b.textContent=h.l;b.onclick=()=>goTools(h);frag.appendChild(b);});}
 }
 function lnk(v,doc){if(!v)return '';return esc(v).replace(/(Table|Figure)s?\s+([0-9A-Za-z]+-\d+)/gi,(m,k,num)=>{const kk=k.charAt(0).toUpperCase()+k.slice(1).toLowerCase(),nn=num.toUpperCase();const key=doc+' '+kk+' '+nn;return DATA.images[key]?`<a class="ref" data-k="${key}" data-l="${kk+' '+nn}">${m}</a>`:m;});}
 function viewer(imgKey,title){const im=DATA.images[imgKey];if(!im)return;$('#vimg').src=im;$('#vtitle').textContent=title||'';$('#viewer').classList.add('on');}
@@ -252,6 +255,9 @@ const TOOLS=[
   sel:[{k:'rate',l:'Time for water to fall 1 in.',opts:[['1 min',4],['2 min',3.2],['5 min',2.4],['10 min',1.7],['30 min',0.8],['60 min',0.6]],v:1.7}],
   in:[{k:'gpd',l:'Daily flow (GPD)'},{k:'w',l:'Trench width (ft)',v:1.5}],
   out:o=>{const a=o.gpd/o.rate;return [['Trench-bottom area',fmt(a)+' sq ft'],['Trench length',fmt(a/o.w)+' ft']];}},
+ {cat:'Fuel',name:'Fuel Estimates',fuel:true,src:'910th ESC Fuel Estimation worksheet (unit planning factors: manufacturer data, TM references and operational planning factors)',
+  note:'Enter how many of each piece of equipment, the hours each will run, and its burn rate. Gallons = quantity × hours × gallons per hour. Burn rates are the unit worksheet planning factors; change them if your equipment differs. Set quantity to 0 for anything you are not bringing. Reset clears quantities and hours but keeps your burn rates.',
+  rows:[['Skid steer',0,0,2.5],['10-ton dump truck',0,0,6.5],['Motor grader',0,0,5.5],['D6 dozer',0,0,6.5],['40-ton excavator',0,0,8],['HEMTT',0,0,8],['924 wheel loader',0,0,4],['HMEE',0,0,5]]},
  {cat:'Electrical',name:'Ohm’s law calculator (V, A, Ω, W)',src:'Basic DC relationships — watts = volts × amps is in TM 3-34.46 para 8-23, 8-24; Ohm’s law itself is not printed in the TM',
   note:'Enter any two of the four values and the other two are worked out: E = I × R and P = E × I (E volts, I amps, R ohms, P watts). For AC loads with a power factor below 1.0, use the single-phase current tool.',
   in:[{k:'e',l:'Volts (V)'},{k:'i',l:'Amps (A)'},{k:'r',l:'Ohms (Ω)'},{k:'p',l:'Watts (W)'}],
@@ -296,8 +302,20 @@ function fmt(n){return (!isFinite(n))?'—':(Math.round(n*100)/100).toLocaleStri
 let toolMem=lsGet('efr-toolmem',{});
 function memGet(key,k,dflt){const m=toolMem[key];return (m&&m[k]!=null)?m[k]:dflt;}
 function memSet(key,k,v){const m=toolMem[key]||(toolMem[key]={});m[k]=v;lsSet('efr-toolmem',toolMem);}
+function fuelCard(t,d){
+ const cols=[['q','Qty'],['h','Hours'],['g','Gal / hr']];
+ const rowsH=t.rows.map((r,i)=>`<div class="frow"><div class="fnm">${esc(r[0])}</div><div class="fins">${cols.map((c,j)=>`<label class="tin"><span>${c[1]}</span><input type="number" inputmode="decimal" step="any" min="0" data-r="${i}" data-c="${c[0]}" value="${memGet(t.name,i+c[0],r[j+1])}"></label>`).join('')}</div><div class="ftot"><span>Gallons</span><b data-t="${i}">—</b></div></div>`).join('');
+ d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><p class="tnote">${esc(t.note)}</p><div class="frows">${rowsH}</div><div class="fgrand"><span>Total fuel required</span><b data-gt>—</b></div><button type="button" class="copy freset">Reset quantities and hours to 0</button><div class="src">Source: ${esc(t.src)}</div></div>`;
+ function calc(){let gt=0;t.rows.forEach((r,i)=>{const v={};cols.forEach(c=>{const el=d.querySelector(`input[data-r="${i}"][data-c="${c[0]}"]`);v[c[0]]=parseFloat(el.value);memSet(t.name,i+c[0],el.value);});
+   const tot=(v.q||0)*(v.h||0)*(v.g||0);gt+=tot;d.querySelector(`[data-t="${i}"]`).textContent=fmt(tot)+' gal';});
+  d.querySelector('[data-gt]').textContent=fmt(gt)+' gal';}
+ d.querySelector('.freset').onclick=()=>{t.rows.forEach((r,i)=>['q','h'].forEach(c=>{d.querySelector(`input[data-r="${i}"][data-c="${c}"]`).value=0;}));calc();};
+ d.addEventListener('input',calc);d.addEventListener('toggle',()=>{if(d.open)calc();});
+ return d;
+}
 function toolCard(t){
- const d=document.createElement('details');d.className='card tool';d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':t.cat==='Plumbing'?'#3f6fa0':t.cat==='Electrical'?'#c9a227':'#2f7d6b');
+ const d=document.createElement('details');d.className='card tool';d.dataset.name=t.name;d.addEventListener('toggle',()=>{if(d.open){const r=lsGet('efr-recenttools',[]).filter(x=>x!==t.name);r.unshift(t.name);lsSet('efr-recenttools',r.slice(0,4));}});
+ if(t.fuel)return fuelCard(t,d);d.style.setProperty('--col',t.cat==='Horizontal'?'#a8702e':t.cat==='Plumbing'?'#3f6fa0':t.cat==='Electrical'?'#c9a227':'#2f7d6b');
  if(t.equip){
   const keys=Object.keys(t.equip);
   d.innerHTML=`<summary><span class="nm">${esc(t.name)}</span><span class="car">&rsaquo;</span></summary><div class="body"><label class="tin"><span>Equipment</span><select data-eq>${keys.map(k=>`<option value="${k}">${esc(t.equip[k].name)}</option>`).join('')}</select></label><div class="eqbody"></div></div>`;
@@ -393,10 +411,23 @@ function render(){
  } else if(tab==='pmcs'){
   renderPmcs(frag);
  } else if(tab==='tools'){
-  countEl.textContent='Field tools — converter, estimates, plumbing & electrical';
+  countEl.textContent='Field tools';
   const ch=document.createElement('div');ch.className='idxhead toolcat first';ch.textContent='Unit converter';frag.appendChild(ch);frag.appendChild(makeConverter());
-  ['Horizontal','Vertical','Plumbing','Electrical'].forEach((cat)=>{const h=document.createElement('div');h.className='idxhead toolcat';h.textContent=cat==='Plumbing'?'Plumbing (TM 3-34.70)':cat==='Electrical'?'Electrical (TM 3-34.46)':cat+' engineering';frag.appendChild(h);TOOLS.filter(t=>t.cat===cat).forEach(t=>frag.appendChild(toolCard(t)));});
+  TOOLS.filter(t=>t.cat==='Fuel').forEach(t=>{const c=toolCard(t);c.classList.add('pinned');frag.appendChild(c);});
+  const rec=lsGet('efr-recenttools',[]).map(n=>TOOLS.find(t=>t.name===n)).filter(t=>t&&t.cat!=='Fuel').slice(0,3);
+  if(rec.length){const rh=document.createElement('div');rh.className='idxhead toolcat';rh.textContent='Recently used';frag.appendChild(rh);
+   const rr=document.createElement('div');rr.className='chartlinks';
+   rec.forEach(t=>{const b=document.createElement('button');b.type='button';b.className='chartlink';b.textContent=t.name;b.onclick=()=>{toolSub=t.cat;lsSet('efr-toolsub',toolSub);openTool=t.name;render();};rr.appendChild(b);});
+   frag.appendChild(rr);}
+  const dh=document.createElement('div');dh.className='idxhead toolcat';dh.textContent='Tools by discipline';frag.appendChild(dh);
+  const tb=document.createElement('div');tb.className='dtabs';tb.setAttribute('role','tablist');
+  TOOL_CATS.forEach(([k,l])=>{const n=TOOLS.filter(t=>t.cat===k).length;const b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.className='dtab';b.setAttribute('aria-selected',toolSub===k?'true':'false');b.innerHTML=`${esc(l)}<small>${n}</small>`;
+   b.onclick=()=>{toolSub=k;lsSet('efr-toolsub',k);const y=tb.getBoundingClientRect().top+window.scrollY-130;render();window.scrollTo(0,Math.max(0,y));};tb.appendChild(b);});
+  frag.appendChild(tb);
+  if(TOOL_SRC[toolSub]){const s2=document.createElement('p');s2.className='tnote';s2.style.margin='8px 2px 4px';s2.textContent=TOOL_SRC[toolSub];frag.appendChild(s2);}
+  const box=document.createElement('div');box.className='dpanel';TOOLS.filter(t=>t.cat===toolSub).forEach(t=>box.appendChild(toolCard(t)));frag.appendChild(box);
   const n=document.createElement('p');n.className='src';n.style.margin='16px 2px';n.textContent='These follow the formulas in the referenced manuals. Enter the job factors (swell, shrinkage, efficiency, mix, waste) from your manual — the tool does the math. Verify critical estimates against the source.';frag.appendChild(n);
+  if(openTool){const nm=openTool;openTool=null;setTimeout(()=>{const c=[...document.querySelectorAll('details.card.tool')].find(x=>x.dataset.name===nm);if(c){c.open=true;c.scrollIntoView({block:'start'});window.scrollBy(0,-140);c.classList.add('flash');}},30);}
  } else if(tab==='extras'){
   const sub=document.createElement('div');sub.className='srow';
   [['tables','Tables'],['glossary','Glossary']].forEach(([k,label])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',extraSub===k?'true':'false');b.textContent=label;b.onclick=()=>{extraSub=k;lsSet('efr-extrasub',k);render();window.scrollTo(0,0);};sub.appendChild(b);});
@@ -423,8 +454,8 @@ function render(){
   frag.appendChild(tr);
   const oh=document.createElement('div');oh.className='idxhead toolcat';oh.textContent='Data';frag.appendChild(oh);
   const sc=document.createElement('div');sc.className='shortcuts';
-  const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si">&#11015;</span><span class="sl">Offline copy</span><span class="sn">${offState()?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
-  const bb=document.createElement('button');bb.className='scut';bb.style.setProperty('--dc','#5a7d5a');bb.innerHTML=`<span class="si">&#128190;</span><span class="sl">Back up / restore</span><span class="sn">&rsaquo;</span>`;bb.onclick=openBackup;sc.appendChild(bb);
+  const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si"><svg class='ic' viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M7 17.5a4.5 4.5 0 0 1-.6-9A5.5 5.5 0 0 1 17 9a4 4 0 0 1 .5 8.5'/><path d='M12 11v8M9 16l3 3 3-3'/></svg></span><span class="sl">Offline copy</span><span class="sn">${offState()?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
+  const bb=document.createElement('button');bb.className='scut';bb.style.setProperty('--dc','#5a7d5a');bb.innerHTML=`<span class="si"><svg class='ic' viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 4v11M7.5 10.5L12 15l4.5-4.5'/><path d='M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3'/></svg></span><span class="sl">Back up / restore</span><span class="sn">&rsaquo;</span>`;bb.onclick=openBackup;sc.appendChild(bb);
   frag.appendChild(sc);
   const n=document.createElement('p');n.className='src';n.style.margin='4px 2px 0';n.textContent='Your favorites, recents, and last position are stored only in this browser. Back them up before clearing your browser or switching devices.';frag.appendChild(n);
  }
