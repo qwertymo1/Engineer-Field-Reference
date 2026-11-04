@@ -1,5 +1,5 @@
-/* Engineer Field Reference service worker - build 8ebf3c87e0 */
-const VER='8ebf3c87e0';
+/* Engineer Field Reference service worker - build b85ce19884 */
+const VER='b85ce19884';
 const SHELL='efr-shell-'+VER;
 const IMGS='efr-images-v1';
 const CORE=["./", "index.html", "app.js", "content.json", "pmcs.json", "pdf-lib.min.js", "da2404-blank.pdf", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
@@ -25,25 +25,36 @@ self.addEventListener('fetch',e=>{
   if(url.pathname.indexOf('/images/')!==-1){
     e.respondWith(caches.open(IMGS).then(async c=>{
       const hit=await c.match(req); if(hit) return hit;
-      try{ const res=await fetch(req); if(res&&res.ok) c.put(req,res.clone()); return res; }
-      catch(err){ return hit||Response.error(); }
+      try{ const res=await tfetch(req,{},15000); if(res&&res.ok) c.put(req,res.clone()); return res; }
+      catch(err){ return Response.error(); }
     }));
     return;
   }
-  // navigations: network-first, fall back to the cached app shell when offline
+  // Everything else is CACHE-FIRST from this build's precached shell, so the app opens
+  // instantly with no signal -- even when the phone's network hangs instead of failing
+  // (airplane mode / no bars).  Updates still arrive: the browser re-checks sw.js on every
+  // launch with signal; a new build installs a new SW that precaches the new shell,
+  // takes over, and the page reloads onto it.
   if(req.mode==='navigate'){
     e.respondWith((async()=>{
-      try{ const res=await fetch(req.url,{cache:'no-cache',credentials:'same-origin'}); if(res&&res.ok){const c=await caches.open(SHELL);c.put('index.html',res.clone());} return res; }
-      catch(err){ const c=await caches.open(SHELL); return (await c.match('index.html'))||(await c.match('./'))||Response.error(); }
+      const c=await caches.open(SHELL);
+      const hit=(await c.match('index.html'))||(await c.match('./'));
+      if(hit) return hit;
+      try{ return await tfetch(req.url,{credentials:'same-origin'},8000); }
+      catch(err){ return Response.error(); }
     })());
     return;
   }
-  // shell assets (app.js, content.json, manifest, icons): network-first with the HTTP cache
-  // bypassed (no-cache), stored under the bare path; offline falls back to the SAME resource
-  // -- never the HTML shell for a script/json request
   e.respondWith((async()=>{
     const c=await caches.open(SHELL);
-    try{ const res=await fetch(req,{cache:'no-cache'}); if(res&&res.ok) c.put(bare(url),res.clone()); return res; }
-    catch(err){ const hit=(await c.match(bare(url)))||(await c.match(req,{ignoreSearch:true})); return hit||Response.error(); }
+    const hit=(await c.match(bare(url)))||(await c.match(req,{ignoreSearch:true}));
+    if(hit) return hit;
+    try{ const res=await tfetch(req,{cache:'no-cache'},20000); if(res&&res.ok) c.put(bare(url),res.clone()); return res; }
+    catch(err){ return Response.error(); }
   })());
 });
+// fetch that gives up instead of waiting forever on a dead connection
+function tfetch(r,o,ms){
+  const ac=new AbortController(); const t=setTimeout(()=>ac.abort(),ms);
+  return fetch(r,Object.assign({},o,{signal:ac.signal})).finally(()=>clearTimeout(t));
+}
