@@ -255,6 +255,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .step input{margin-top:2px;width:18px;height:18px;flex:none}
 .step span{font-size:13.5px;line-height:1.4}
 .step.done span{text-decoration:line-through;color:var(--muted)}
+.clhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.clprog{font-size:12.5px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.clbtn{border:1px solid var(--line);background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:600;border-radius:6px;padding:4px 10px;cursor:pointer}
+.clbtn.clon{margin:8px 0 2px}
+.gitem .gs{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.gsearch{margin:4px 0 10px}
 /* global search result groups */
 .srchgrp{font-weight:800;font-size:12.5px;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.4px;
  margin:16px 2px 9px;border-top:1px solid var(--line);padding-top:13px}
@@ -363,6 +369,20 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pm-msg.err{border-color:#a43a30;color:#a43a30}
 .pm-msg.ok{border-color:#3f7d2c;color:#3f7d2c}
 
+.pm-blank{border-left-style:dashed}
+.pm-brow{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0;background:var(--surface)}
+.pm-brow .bh{display:flex;justify-content:space-between;align-items:center}
+.pm-brow textarea{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--fg);resize:vertical}
+.pm-brow .symd{font-size:12.5px;color:var(--muted);margin-top:4px;min-height:0}
+.pm-x{border:1px solid var(--line);background:transparent;color:var(--warn);font:inherit;font-size:13px;font-weight:700;border-radius:6px;padding:4px 10px;cursor:pointer}
+
+.pm-hist{margin:4px 0 10px}
+.pm-hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 2px;border-bottom:1px solid var(--line)}
+.pm-hrow .hi{display:flex;flex-direction:column;min-width:0}
+.pm-hrow .hi span{font-size:12.5px;color:var(--muted)}
+.pm-hrow .ha{display:flex;gap:6px}
+.pm-hrow .del{color:var(--warn)}
+
 :root{
  --bg:#ecebdf; --surface:#fbfaf3; --surface2:#f3f2e8; --fg:#22231a; --muted:#66654f;
  --line:#d5d2c0; --accent:#46551f; --accent-ink:#3a461a; --onacc:#f3f1e4; --warn:#8a2f2f;
@@ -404,8 +424,10 @@ body::before{background:var(--bar)}
 @media(min-width:460px){.jobgrid{grid-template-columns:repeat(2,1fr)}}
 .jobcard{display:flex;align-items:center;gap:11px;text-align:left;border:0;border-radius:0;background:transparent;padding:13px 12px;
  border-bottom:1px solid var(--line)}
+.jobcard{border-bottom:0;border-top:1px solid var(--line)}
+.jobcard:nth-child(-n+2){border-top:0}
 .jobcard:nth-child(odd){border-right:1px solid var(--line)}
-.jobcard:nth-last-child(-n+2){border-bottom:0}
+.jobcard:last-child:nth-child(odd){grid-column:1/-1;border-right:0}
 .jobcard .ji{margin:0;color:var(--tan)}
 .jobcard .jl{font-weight:600;font-size:17px}
 .jobcard:active,.secbtn:active,.disccard:active,.mancard:active{background:var(--surface2)}
@@ -493,6 +515,25 @@ body::before{background:var(--bar)}
 .fgrand{border-radius:var(--r2)}
 .pm-eq{border-left-width:3px;border-radius:var(--r2)}
 .pm-eq .n{font-family:var(--f-hd);font-size:19px;font-weight:700}
+
+/* ---- red night mode: keeps night vision and light discipline ---- */
+:root[data-theme="night"]{
+ --bg:#000; --surface:#080000; --surface2:#120202; --fg:#c4372d; --muted:#8c2a22;
+ --line:#2e0907; --accent:#b8322a; --accent-ink:#d0453a; --onacc:#000; --warn:#e2553f;
+ --chip:#160303; --tan:#a8352a; --bar:#0a0000; --shadow:none; color-scheme:dark;}
+:root[data-theme="night"] body{background:#000}
+:root[data-theme="night"] .bar,:root[data-theme="night"] .bar button{color:var(--fg)}
+:root[data-theme="night"] .bar button{border-color:var(--line)}
+:root[data-theme="night"] .bar{border-bottom-color:var(--line)}
+:root[data-theme="night"] img{filter:invert(1) grayscale(1) sepia(1) hue-rotate(-50deg) saturate(6) brightness(.55)}
+:root[data-theme="night"] .bar img{filter:grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5) brightness(.5)}
+:root[data-theme="night"] .card,:root[data-theme="night"] .disccard,:root[data-theme="night"] .mancard,:root[data-theme="night"] .scut,:root[data-theme="night"] .pm-eq{border-left-color:var(--accent)!important}
+:root[data-theme="night"] .scut .si,:root[data-theme="night"] .disccard .dt{color:var(--accent-ink)!important}
+:root[data-theme="night"] .seclab,:root[data-theme="night"] .sk,:root[data-theme="night"] .badge{background:var(--chip)!important;color:var(--accent-ink)!important}
+:root[data-theme="night"] .resume,:root[data-theme="night"] .pm-btn:not(.sec){background:var(--chip)!important;color:var(--accent-ink)!important;border:1px solid var(--line)!important}
+:root[data-theme="night"] .kr.w dd,:root[data-theme="night"] .warn{color:var(--warn)!important}
+:root[data-theme="night"] input,:root[data-theme="night"] select,:root[data-theme="night"] textarea{background:var(--surface2);color:var(--fg);border-color:var(--line)}
+:root[data-theme="night"] ::placeholder{color:var(--muted)}
 </style></head><body>
 <div id="app">
  <div class="bar">
@@ -581,7 +622,7 @@ body::before{background:var(--bar)}
 </div>
 <script>
 (function(){
- var V='b85ce19884'; window.__BUILD__=V;
+ var V='00d9a523ca'; window.__BUILD__=V;
  // ?v= ties content.json + app.js to THIS page's build, so a cached old script can never
  // run under a new page (the SW strips ?v= for its offline copy, so offline still works)
  fetch('content.json?v='+V,{cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){

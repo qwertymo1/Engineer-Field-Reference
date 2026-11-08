@@ -1,4 +1,4 @@
-/* build b85ce19884 */
+/* build 00d9a523ca */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -30,13 +30,23 @@ function shareLink(id){copyTxt(location.origin+location.pathname+'#'+id,'Link co
 function reportIssue(id){const e=byId[id];const subj=encodeURIComponent('Engineer Field Reference — issue with '+(id||''));const body=encodeURIComponent('Task: '+(e?e.n:id)+'\nManual: '+(e?(MANFULL[e.doc]||{}).name:'')+'\n\nWhat looks wrong:\n');window.location.href='mailto:Dylan.W.Lundquist.Mil@army.mil?subject='+subj+'&body='+body;}
 // ---- checkable how-to steps: only when the source text itself is a numbered sequence (never invented) ----
 function splitSteps(how){
+ // numbered steps "1. ... 2. ... 10. ..." -- only accept numbers that run in order, so "6.5 gal" or "3/4 in." never split
  if(!how) return null;
- const nums=[];const re=/(?:^|[\s.])([1-9])[\.\)]\s+/g;let mm;
- while((mm=re.exec(how))) nums.push(mm[1]);
- if(new Set(nums).size<2) return null;
- const parts=how.split(/(?:^|[\s.])[1-9][\.\)]\s+/).map(s=>s.trim()).filter(Boolean);
+ const re=/(^|[\s.;:])(\d{1,2})[\.\)]\s+/g;let mm,want=1;const cuts=[];
+ while((mm=re.exec(how))){if(+mm[2]===want){cuts.push({at:mm.index+mm[1].length,body:mm.index+mm[0].length});want++;}}
+ if(cuts.length<2) return null;
+ const parts=[];const pre=how.slice(0,cuts[0].at).trim();
+ cuts.forEach((c,i)=>{const end=i+1<cuts.length?cuts[i+1].at:how.length;const p=how.slice(c.body,end).trim();if(p)parts.push(p);});
+ if(pre&&parts.length)parts[0]=pre+' '+parts[0];
  return parts.length>=2?parts:null;
 }
+function sentSteps(how){
+ // unnumbered how-to text: one checkbox per sentence (3 or more sentences)
+ if(!how) return null;
+ const p=how.split(/(?<=[.;])\s+(?=[A-Z(])/).map(x=>x.trim()).filter(x=>x.length>2);
+ return p.length>=3?p:null;
+}
+let clState=lsGet('efr-cl',{});
 let stepState=lsGet('efr-steps',{});
 function setStep(tid,i,on){const a=stepState[tid]||(stepState[tid]=[]);a[i]=on;lsSet('efr-steps',stepState);}
 const CONV={Length:[['Feet',0.3048],['Meters',1],['Inches',0.0254],['Yards',0.9144]],
@@ -64,7 +74,7 @@ function trustLine(){
  return el;
 }
 // ---- glossary auto-linking: link the first mention of each term per card, longest term wins ----
-const GLOSS=(DATA.glossary||[]).map(g=>g.t).filter(t=>t&&t.length>=3).sort((a,b)=>b.length-a.length);
+const GLOSS=(DATA.glossary||[]).map(g=>g.t).filter(t=>t&&t.length>=3&&/[A-Z]{2}/.test(t)&&t===t.toUpperCase()).sort((a,b)=>b.length-a.length);
 const GLOSSMAP={};(DATA.glossary||[]).forEach(g=>{GLOSSMAP[g.t.toLowerCase()]=g.d;});
 function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 function linkGlossary(root){
@@ -125,11 +135,13 @@ function taskCard(t){const d=document.createElement('details');d.className='card
  const keystrip=key?`<div class="keystrip">${key}</div>`:'';
  let kv='';const row=(l,v)=>{if(v)kv+=`<dt>${l}</dt><dd>${lnk(v,t.doc)}</dd>`;};
  row('Type',t.tp);row('Use case',t.use);
- const steps=splitSteps(t.how);
+ let steps=splitSteps(t.how);let canCl=false;
+ if(!steps){const ss=sentSteps(t.how);if(ss){canCl=true;if(clState[t.id])steps=ss;}}
  let howHtml='';
- if(steps){const st=(stepState[t.id]||[]);howHtml=`<div class="lead"><b>How to:</b></div><ul class="steps" data-steps="${esc(t.id)}">`+
+ if(steps){const st=(stepState[t.id]||[]);const done=steps.filter((_,i)=>st[i]).length;
+   howHtml=`<div class="lead clhead"><b>How to:</b><span class="clprog" data-prog="${esc(t.id)}">${done} of ${steps.length} done</span><button type="button" class="clbtn" data-sreset="${esc(t.id)}">Reset</button>${canCl?`<button type="button" class="clbtn" data-cl="${esc(t.id)}">Show as text</button>`:''}</div><ul class="steps" data-steps="${esc(t.id)}" data-n="${steps.length}">`+
    steps.map((s,i)=>`<li class="step${st[i]?' done':''}" data-i="${i}"><input type="checkbox" ${st[i]?'checked':''} aria-label="Mark step done"><span>${lnk(s,t.doc)}</span></li>`).join('')+`</ul>`;}
- else row('How to',t.how);
+ else{row('How to',t.how);if(canCl)howHtml=`<button type="button" class="clbtn clon" data-cl="${esc(t.id)}">&#9745; Use as checklist</button>`;}
  row('Time / effort',t.tm);row('Protection',t.pr);
  const pics=(t.figs||[]).filter(k=>DATA.images[k]);
  let fig='';
@@ -258,6 +270,20 @@ const TOOLS=[
  {cat:'Fuel',name:'Fuel Estimates',fuel:true,src:'910th ESC Fuel Estimation worksheet (unit planning factors: manufacturer data, TM references and operational planning factors)',
   note:'Enter how many of each piece of equipment, the hours each will run, and its burn rate. Gallons = quantity × hours × gallons per hour. Burn rates are the unit worksheet planning factors; change them if your equipment differs. Set quantity to 0 for anything you are not bringing. Reset clears quantities and hours but keeps your burn rates.',
   rows:[['Skid steer',0,0,2.5],['10-ton dump truck',0,0,6.5],['Motor grader',0,0,5.5],['D6 dozer',0,0,6.5],['40-ton excavator',0,0,8],['HEMTT',0,0,8],['924 wheel loader',0,0,4],['HMEE',0,0,5]]},
+ {cat:'Horizontal',name:'Chains needed to haul equipment',src:'49 CFR 393.108 (chain working load limits), 393.106(d) (aggregate WLL), 393.130 (heavy equipment); FMCSA Driver’s Handbook on Cargo Securement',
+  note:'For chains running straight from the trailer to tiedown points on the machine (each counts at 50% of its WLL). Minimum 4 chains for 10,000 lb or more. The WLL of each tiedown is the lowest rating of the chain, hooks, binder and anchor point — enter the binder or anchor rating if it is lower than the chain. Unmarked chain counts as grade 30. Weight is on the machine data plate or in its TM.',
+  in:[{k:'w',l:'Machine weight (lb)'},{k:'bw',l:'Binder or anchor WLL if lower (lb, optional)'}],
+  sel:[{k:'g',l:'Chain grade',opts:[['Grade 70 transport',2],['Grade 80 alloy',3],['Grade 100 alloy',4],['Grade 43 high test',1],['Grade 30 proof coil / unmarked',0]],v:0},
+       {k:'s',l:'Chain size',opts:[['3/8 in',2],['1/2 in',4],['5/16 in',1],['7/16 in',3],['5/8 in',5],['1/4 in',0]],v:0}],
+  out:o=>{const T=[[1300,1900,2650,3700,4500,6900],[2600,3900,5400,7200,9200,13000],[3150,4700,6600,8750,11300,15800],[3500,4500,7100,0,12000,18100],[4300,5700,8800,0,15000,22600]];
+   const c=T[o.g][o.s];if(!c)return[['Chain WLL','Not listed in 49 CFR 393.108 for this grade and size — use the WLL marked on the chain']];
+   const e=(o.bw>0&&o.bw<c)?o.bw:c;const r=[['WLL per tiedown',fmt(e)+' lb'+(e<c?' (binder/anchor)':'')]];
+   if(!(o.w>0))return r;
+   const n=Math.max(4,Math.ceil(o.w/e));
+   r.push(['Chains needed',String(n)],['Total WLL of those chains',fmt(n*e)+' lb'],['Aggregate WLL',fmt(n*e/2)+' lb'],['Required (half the weight)',fmt(o.w/2)+' lb']);
+   if(o.w>=10000&&e<5000)r.push(['Too light','Under the 5,000 lb per-tiedown minimum the FMCSA handbook gives for equipment over 10,000 lb — use a larger or higher-grade chain']);
+   if(o.w<10000)r.push(['Under 10,000 lb','The heavy-equipment rule is optional; the general cargo rules also allow fewer tiedowns by length']);
+   return r;}},
  {cat:'Electrical',name:'Ohm’s law calculator (V, A, Ω, W)',src:'Basic DC relationships — watts = volts × amps is in TM 3-34.46 para 8-23, 8-24; Ohm’s law itself is not printed in the TM',
   note:'Enter any two of the four values and the other two are worked out: E = I × R and P = E × I (E volts, I amps, R ohms, P watts). For AC loads with a power factor below 1.0, use the single-phase current tool.',
   in:[{k:'e',l:'Volts (V)'},{k:'i',l:'Amps (A)'},{k:'r',l:'Ohms (Ω)'},{k:'p',l:'Watts (W)'}],
@@ -430,7 +456,7 @@ function render(){
   if(openTool){const nm=openTool;openTool=null;setTimeout(()=>{const c=[...document.querySelectorAll('details.card.tool')].find(x=>x.dataset.name===nm);if(c){c.open=true;c.scrollIntoView({block:'start'});window.scrollBy(0,-140);c.classList.add('flash');}},30);}
  } else if(tab==='extras'){
   const sub=document.createElement('div');sub.className='srow';
-  [['tables','Tables'],['glossary','Glossary']].forEach(([k,label])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',extraSub===k?'true':'false');b.textContent=label;b.onclick=()=>{extraSub=k;lsSet('efr-extrasub',k);render();window.scrollTo(0,0);};sub.appendChild(b);});
+  [['tables','Tables'],['glossary','Terms & acronyms']].forEach(([k,label])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',extraSub===k?'true':'false');b.textContent=label;b.onclick=()=>{extraSub=k;lsSet('efr-extrasub',k);render();window.scrollTo(0,0);};sub.appendChild(b);});
   frag.appendChild(sub);
   if(extraSub==='tables'){
    const mf=lsGet('efr-tblman','');
@@ -443,15 +469,26 @@ function render(){
    rows.forEach(t=>{const el=document.createElement('div');el.className='tbl';el.innerHTML=`<div class="cap">${esc(t.t)}. ${esc(t.cap)}</div><img src="${DATA.images[t.img]}" alt="" loading="lazy" decoding="async">`;el.onclick=()=>viewer(t.img,t.t+'. '+t.cap);frag.appendChild(el);});
   } else {
    const rows=DATA.glossary;
-   countEl.textContent=rows.length+' terms';
-   rows.forEach(g=>{const el=document.createElement('div');el.className='gitem';el.innerHTML=`<span class="t">${esc(g.t)}</span> &mdash; <span class="d">${esc(g.d)}</span>`;frag.appendChild(el);});
+   countEl.textContent=rows.length+' terms and acronyms';
+   const gq=document.createElement('label');gq.className='search gsearch';gq.innerHTML=`<input type="search" id="gq" placeholder="Look up a term or acronym" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Look up a term or acronym">`;frag.appendChild(gq);
+   const gl=document.createElement('div');gl.className='glist';frag.appendChild(gl);
+   const draw=q=>{q=(q||'').trim().toLowerCase();gl.innerHTML='';
+    let hits=q?rows.filter(g=>g.t.toLowerCase().includes(q)||g.d.toLowerCase().includes(q)):rows;
+    if(q)hits=hits.slice().sort((a,b)=>{const r=g=>{const t=g.t.toLowerCase();return t===q?0:t.startsWith(q)?1:t.includes(q)?2:3;};return r(a)-r(b)||a.t.localeCompare(b.t);});
+    if(!hits.length){gl.innerHTML=`<p class="empty">No term matches “${esc(q)}”. Try fewer letters.</p>`;return;}
+    const f2=document.createDocumentFragment();hits.slice(0,400).forEach(g=>{const el=document.createElement('div');el.className='gitem';el.innerHTML=`<span class="t">${esc(g.t)}</span> &mdash; <span class="d">${esc(g.d)}</span>${g.s?`<span class="gs">${esc(g.s)}</span>`:''}`;f2.appendChild(el);});
+    if(hits.length>400){const m=document.createElement('p');m.className='empty';m.textContent=`Showing 400 of ${hits.length}. Type more letters to narrow it down.`;f2.appendChild(m);}
+    gl.appendChild(f2);};
+   draw(lsGet('efr-gq',''));
+   setTimeout(()=>{const i=document.getElementById('gq');if(i){i.value=lsGet('efr-gq','');i.addEventListener('input',()=>{lsSet('efr-gq',i.value);draw(i.value);});}},0);
   }
  } else if(tab==='settings'){
   countEl.textContent='Settings';
   const th=document.createElement('div');th.className='idxhead toolcat first';th.textContent='Appearance';frag.appendChild(th);
   const tr=document.createElement('div');tr.className='srow';
-  [['auto','Match device'],['light','Light'],['dark','Dark']].forEach(([k,l])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',getTheme()===k?'true':'false');b.textContent=l;b.onclick=()=>{setTheme(k);render();};tr.appendChild(b);});
+  [['auto','Match device'],['light','Light'],['dark','Dark'],['night','Red night']].forEach(([k,l])=>{const b=document.createElement('button');b.className='chip';b.setAttribute('aria-pressed',getTheme()===k?'true':'false');b.textContent=l;b.onclick=()=>{setTheme(k);render();};tr.appendChild(b);});
   frag.appendChild(tr);
+  if(getTheme()==='night'){const nn=document.createElement('p');nn.className='tnote';nn.style.margin='6px 2px';nn.textContent='Red night: dim red on black to protect night vision. Turn your screen brightness down too.';frag.appendChild(nn);}
   const oh=document.createElement('div');oh.className='idxhead toolcat';oh.textContent='Data';frag.appendChild(oh);
   const sc=document.createElement('div');sc.className='shortcuts';
   const ob=document.createElement('button');ob.className='scut';ob.style.setProperty('--dc','#3f6fa0');ob.innerHTML=`<span class="si"><svg class='ic' viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M7 17.5a4.5 4.5 0 0 1-.6-9A5.5 5.5 0 0 1 17 9a4 4 0 0 1 .5 8.5'/><path d='M12 11v8M9 16l3 3 3-3'/></svg></span><span class="sl">Offline copy</span><span class="sn">${offState()?'Saved ✓':'Not saved'}</span>`;ob.onclick=openOffline;sc.appendChild(ob);
@@ -471,7 +508,11 @@ listEl.addEventListener('click',e=>{
  const rf=e.target.closest('.ref');if(rf){e.preventDefault();e.stopPropagation();viewer(rf.dataset.k,rf.dataset.l);return;}
  const sp=e.target.closest('.step');if(sp){const li=sp,ul=li.closest('[data-steps]'),i=+li.dataset.i,cb=li.querySelector('input');
   if(e.target.tagName!=='INPUT')cb.checked=!cb.checked;
-  const on=cb.checked;li.classList.toggle('done',on);setStep(ul.dataset.steps,i,on);return;}
+  const on=cb.checked;li.classList.toggle('done',on);setStep(ul.dataset.steps,i,on);
+  const pg=ul.parentElement.querySelector('[data-prog]');if(pg)pg.textContent=ul.querySelectorAll('.step.done').length+' of '+ul.dataset.n+' done';return;}
+ const sr=e.target.closest('[data-sreset]');if(sr){e.preventDefault();e.stopPropagation();const id=sr.dataset.sreset;delete stepState[id];lsSet('efr-steps',stepState);const ul=sr.closest('.card').querySelector('[data-steps]');if(ul){ul.querySelectorAll('.step').forEach(li=>{li.classList.remove('done');li.querySelector('input').checked=false;});const pg=sr.parentElement.querySelector('[data-prog]');if(pg)pg.textContent='0 of '+ul.dataset.n+' done';}return;}
+ const cl=e.target.closest('[data-cl]');if(cl){e.preventDefault();e.stopPropagation();const id=cl.dataset.cl;if(clState[id])delete clState[id];else clState[id]=1;lsSet('efr-cl',clState);
+  const card=cl.closest('details.card');const t=DATA.entries.find(x=>x.id===id);if(card&&t){const nc=taskCard(t);nc.open=true;card.replaceWith(nc);try{linkGlossary(nc);}catch(x){}}return;}
  const b=e.target.closest('.pcell,.figbtn');if(b){e.preventDefault();viewer(b.dataset.fig,b.dataset.fig);}});
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected','false'));t.setAttribute('aria-selected','true');tab=t.dataset.tab;q='';$('#q').value='';$('#qx').style.display='none';$('#q').placeholder='Search everything…';render();window.scrollTo(0,0);});
 $('#q').placeholder='Search everything…';
@@ -555,7 +596,7 @@ const TIPS=[
 ];
 
 // ================= PMCS module: guided PMCS -> faults -> DA Form 2404 =================
-const PM_SESS='efr-pmcs-sess', PM_ADM='efr-pmcs-admin';
+const PM_SESS='efr-pmcs-sess', PM_ADM='efr-pmcs-admin', PM_BLANK='efr-pmcs-blank';
 const PM_IVORDER=['Before','During','After','Weekly','Monthly','Quarterly','Semiannual','Annually','Periodic'];
 const PM_IVLABEL={Periodic:'Periodic (hours / months)'};
 const PM_SYMS=[
@@ -592,6 +633,7 @@ function renderPmcs(frag){
  else if(v.s==='review')pmReview(w);
  else if(v.s==='admin')pmAdmin(w);
  else if(v.s==='done')pmDone(w);
+ else if(v.s==='blank')pmBlank(w);
 }
 function pmGo(s,extra){Object.assign(pmView,extra||{});pmView.s=s;pmMsg='';render();pmTop();}
 function pmBack(){
@@ -599,7 +641,7 @@ function pmBack(){
  if(s==='step'){pmGo('list');return;}
  if(s==='review'){pmGo('step',{});return;}
  if(s==='admin'){pmGo('review');return;}
- if(s==='done'){pmGo('admin');return;}
+ if(s==='done'){pmGo(pmView.blank?'blank':'admin');return;}
  pmGo('list');
 }
 
@@ -608,6 +650,12 @@ function pmList(w){
  const intro=document.createElement('p');intro.className='pm-note';
  intro.textContent='Pick your equipment, choose the PMCS interval, and step through every check in the TM. Record faults as you go; at the end the app fills out a DA Form 2404 you can download or email.';
  w.appendChild(intro);
+ const bb=document.createElement('button');bb.className='pm-eq pm-blank';
+ const bs=lsGet(PM_BLANK,null);const bn=bs&&bs.rows?bs.rows.filter(r=>r.def||r.corr).length:0;
+ bb.innerHTML=`<div class="t"><span class="n">Blank DA Form 2404</span></div><div class="s">Fill out the form yourself for any equipment: header boxes plus your own deficiency lines.</div>${bn?`<span class="resume">Draft saved: ${bn} line${bn===1?'':'s'}</span>`:''}`;
+ bb.onclick=()=>{pmView={s:'blank',blank:true};pmGo('blank');};
+ w.appendChild(bb);
+ const hb=document.createElement('div');hb.className='pm-hist';w.appendChild(hb);pmHistShow(hb);
  const groups=[['Construction equipment',['d6k','deuce','hmee','loader']],['Vehicles',['hmmwv','m915','dump']]];
  const all=pmAll();
  groups.forEach(([gname,ids])=>{
@@ -862,8 +910,9 @@ async function pmBuildPdf(e,a){
  const font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
  const ink=rgb(0.04,0.1,0.45);
  // gather faults
- const st=pmSteps(e,pmSess.iv);
- const faults=st.filter(s=>pmSess.ans[s.key]&&pmSess.ans[s.key].r==='fault').map(s=>Object.assign({s},pmSess.ans[s.key].f));
+ let faults;
+ if(a.__rows){faults=a.__rows.filter(r=>(r.def||'').trim()||(r.corr||'').trim()).map(r=>({s:{id:(r.id||'').trim()},sym:r.sym||'',def:r.def||'',corr:r.corr||''}));}
+ else{const st=pmSteps(e,pmSess.iv);faults=st.filter(s=>pmSess.ans[s.key]&&pmSess.ans[s.key].r==='fault').map(s=>Object.assign({s},pmSess.ans[s.key].f));}
  // lay out rows: each fault may need >1 row
  const rows=[];
  const defW=PM_COL.def[1]-PM_COL.def[0]-6,corW=PM_COL.cor[1]-PM_COL.cor[0]-6,SZ=7.2,LINE=8.3,MAXL=2; // lines per row
@@ -907,14 +956,15 @@ async function pmBuildPdf(e,a){
  doc.setTitle('DA Form 2404 - '+pmAscii(e.name)+' - '+pmAscii(a.date));
  doc.setProducer('Engineer Field Reference');
  const bytes=await doc.save();
- return {bytes,pages:pageCount,faults:faults.length,rows:total,name:'DA2404_'+e.id.toUpperCase()+'_'+(a.date||pmToday())+'.pdf',admin:a,eq:e};
+ return {bytes,pages:pageCount,faults:faults.length,rows:total,name:'DA2404_'+e.id.toUpperCase()+'_'+(a.date||pmToday())+'.pdf',admin:a,eq:e,blank:!!a.__rows};
 }
 
 // ---------- 7. done: download / email ----------
 function pmDone(w){
  const r=pmPdf,e=r.eq;
+ if(!r.saved){r.saved=true;pmHistAdd(r);}
  const d=document.createElement('div');d.className='pm-done';
- d.innerHTML=`<div class="big">✅</div><div class="pm-title">DA Form 2404 is ready</div><p class="pm-note">${pmEsc(e.name)} · ${r.faults} fault${r.faults===1?'':'s'} · ${r.pages} page${r.pages===1?'':'s'}</p>`;
+ d.innerHTML=`<div class="big">✅</div><div class="pm-title">DA Form 2404 is ready</div><p class="pm-note">${pmEsc(e.name)} · ${r.faults} ${r.blank?'line':'fault'}${r.faults===1?'':'s'} · ${r.pages} page${r.pages===1?'':'s'}</p>`;
  w.appendChild(d);
  const blob=new Blob([r.bytes],{type:'application/pdf'});
  const file=(()=>{try{return new File([blob],r.name,{type:'application/pdf'});}catch(x){return null;}})();
@@ -938,11 +988,102 @@ function pmDone(w){
  const msg=document.createElement('div');msg.id='pmmsg';w.appendChild(msg);
  if(pmMsg)msg.innerHTML=pmMsg;
  const open=document.createElement('button');open.className='pm-btn sec';open.textContent='Open / preview PDF';open.onclick=()=>{const u=URL.createObjectURL(blob);window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);};w.appendChild(open);
- const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Edit equipment data';bk.onclick=()=>pmGo('admin');w.appendChild(bk);
- const fin=document.createElement('button');fin.className='pm-btn sec';fin.textContent='Finished — clear this inspection';fin.onclick=()=>{if(!confirm('Clear this inspection from the app? Make sure you saved or sent the PDF first.'))return;const a=pmAll();delete a[e.id];lsSet(PM_SESS,a);pmSess=null;pmPdf=null;pmGo('list');};w.appendChild(fin);
+ const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent=r.blank?'‹ Edit the form':'‹ Edit equipment data';bk.onclick=()=>pmGo(r.blank?'blank':'admin');w.appendChild(bk);
+ const fin=document.createElement('button');fin.className='pm-btn sec';fin.textContent=r.blank?'Finished — clear this form':'Finished — clear this inspection';fin.onclick=()=>{if(!confirm(r.blank?'Clear this form from the app? Make sure you saved or sent the PDF first.':'Clear this inspection from the app? Make sure you saved or sent the PDF first.'))return;if(r.blank){const g=lsGet(PM_BLANK,{});lsSet(PM_BLANK,{org:g.org,inspector:g.inspector,email:g.email});}else{const a=pmAll();delete a[e.id];lsSet(PM_SESS,a);pmSess=null;}pmPdf=null;pmGo('list');};w.appendChild(fin);
  const nt=document.createElement('p');nt.className='pm-note';nt.textContent='The form is filled from your entries and is unsigned. Faults go to your supervisor / maintenance chain per local SOP; this app does not submit anything.';w.appendChild(nt);
 }
 function pmNote(t,ok){const m=document.getElementById('pmmsg');pmMsg=`<div class="pm-msg${ok?' ok':' err'}">${pmEsc(t)}</div>`;if(m)m.innerHTML=pmMsg;}
+
+// ---------- blank DA Form 2404 (fill out by hand) ----------
+function pmBlank(w){
+ const g=lsGet(PM_ADM,{});
+ const d=Object.assign({org:g.org||'',inspector:g.inspector||'',email:g.email||'',model:'',serial:'',miles:'',hours:'',rounds:'',hot:'',date:pmToday(),type:'',tm1:'',tmd1:'',tm2:'',tmd2:'',time1:'',mh:'',rows:[]},lsGet(PM_BLANK,{}));
+ if(!d.date)d.date=pmToday();
+ if(!d.rows||!d.rows.length)d.rows=[{id:'',sym:'',def:'',corr:''}];
+ const save=()=>{lsSet(PM_BLANK,d);lsSet(PM_ADM,{org:d.org,inspector:d.inspector,email:d.email});};
+ const t=document.createElement('div');t.className='pm-h';t.textContent='Blank DA Form 2404';w.appendChild(t);
+ const p=document.createElement('p');p.className='pm-note';p.textContent='Fill in any box you need; everything is optional. Your entries are saved on this phone as you type, so you can come back to the draft.';w.appendChild(p);
+ const f=document.createElement('div');f.className='pm-form';
+ const fld=(k,label,ph,extra)=>`<div><label for="pb_${k}">${label}</label><input id="pb_${k}" data-k="${k}" value="${pmEsc(d[k])}" placeholder="${pmEsc(ph||'')}" ${extra||''} autocomplete="off" autocapitalize="characters"></div>`;
+ f.innerHTML=`${fld('org','1. Organization','e.g. 1-1 EN BN, A CO')}
+ ${fld('model','2. Nomenclature and model','e.g. TRUCK, DUMP 10 TON')}
+ ${fld('serial','3. Registration / serial / NSN','Bumper no., serial no., or NSN')}
+ <div class="g2">${fld('miles','4a. Miles','','inputmode="numeric"')}${fld('hours','4b. Hours','','inputmode="decimal"')}</div>
+ <div class="g2">${fld('rounds','4c. Rounds fired','','inputmode="numeric"')}${fld('hot','4d. Hot starts','','inputmode="numeric"')}</div>
+ <div class="g2">${fld('date','5. Date (YYYYMMDD)','','inputmode="numeric"')}${fld('type','6. Type inspection','e.g. BEFORE')}</div>
+ <div class="g2">${fld('tm1','7. TM number','')}${fld('tmd1','TM date (YYYYMMDD)','','inputmode="numeric"')}</div>
+ <div class="g2">${fld('tm2','TM number (2nd, optional)','')}${fld('tmd2','TM date (2nd)','','inputmode="numeric"')}</div>
+ ${fld('inspector','8a. Person performing inspection (printed name)','e.g. SPC SMITH, J.')}
+ <div class="g2">${fld('time1','8b. Time (HHMM)','','inputmode="numeric"')}${fld('mh','10. Man-hours required','','inputmode="decimal"')}</div>`;
+ w.appendChild(f);
+ f.addEventListener('input',ev=>{const i=ev.target;if(i.dataset.k){d[i.dataset.k]=i.value;save();}});
+ const h2=document.createElement('div');h2.className='pm-h';h2.textContent='Deficiencies and shortcomings';w.appendChild(h2);
+ const key=document.createElement('p');key.className='pm-note';key.textContent='Status symbols: '+PM_SYMS.map(x=>x.g+' '+x.n).join(', ')+'. Tap a symbol for what it means.';w.appendChild(key);
+ const list=document.createElement('div');list.className='pm-brows';w.appendChild(list);
+ const draw=()=>{
+  list.innerHTML='';
+  d.rows.forEach((r,i)=>{
+   const c=document.createElement('div');c.className='pm-brow pm-form';
+   c.innerHTML=`<div class="bh"><b>Line ${i+1}</b>${d.rows.length>1?`<button type="button" class="pm-x" aria-label="Remove line ${i+1}">Remove</button>`:''}</div>
+   <div class="g2"><div><label>TM item no.</label><input data-f="id" value="${pmEsc(r.id)}" autocapitalize="characters" autocomplete="off"></div>
+   <div><label>Status</label><select data-f="sym"><option value="">None</option>${PM_SYMS.map(x=>`<option value="${x.k}"${r.sym===x.k?' selected':''}>${x.g}  ${x.n}</option>`).join('')}</select></div></div>
+   <div class="symd">${r.sym?pmEsc((PM_SYMS.find(x=>x.k===r.sym)||{}).d||''):''}</div>
+   <label>Deficiency</label><textarea data-f="def" rows="2">${pmEsc(r.def)}</textarea>
+   <label>Corrective action</label><textarea data-f="corr" rows="2">${pmEsc(r.corr)}</textarea>`;
+   c.addEventListener('input',ev=>{const x=ev.target;if(x.dataset.f){r[x.dataset.f]=x.value;save();if(x.dataset.f==='sym')c.querySelector('.symd').textContent=x.value?((PM_SYMS.find(y=>y.k===x.value)||{}).d||''):'';}});
+   const rm=c.querySelector('.pm-x');if(rm)rm.onclick=()=>{d.rows.splice(i,1);save();draw();};
+   list.appendChild(c);
+  });
+ };
+ draw();
+ const add=document.createElement('button');add.className='pm-btn sec';add.textContent='+ Add a line';add.onclick=()=>{d.rows.push({id:'',sym:'',def:'',corr:''});save();draw();const l=list.lastElementChild;if(l){l.scrollIntoView({block:'center'});const q=l.querySelector('input');if(q)q.focus();}};w.appendChild(add);
+ const ef=document.createElement('div');ef.className='pm-form';ef.innerHTML=`<div><label for="pb_email">Email the form to (optional)</label><input id="pb_email" data-k="email" value="${pmEsc(d.email)}" placeholder="name@army.mil" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div><div class="hint">Signature boxes are left blank — print and sign, or sign in your maintenance system.</div>`;
+ ef.addEventListener('input',ev=>{d.email=ev.target.value;save();});w.appendChild(ef);
+ const go=document.createElement('button');go.className='pm-btn';go.textContent='Create DA Form 2404 ›';
+ go.onclick=async()=>{go.disabled=true;go.textContent='Creating…';
+  const a=Object.assign({},d,{__rows:d.rows});
+  const e={id:'blank',name:d.model||'Equipment',tm:d.tm1||''};
+  try{pmPdf=await pmBuildPdf(e,a);pmView.blank=true;pmGo('done');}catch(err){go.disabled=false;go.textContent='Create DA Form 2404 ›';const m=document.createElement('div');m.className='pm-msg err';m.textContent='Could not create the PDF: '+(err&&err.message||err);w.appendChild(m);console.error(err);}};
+ w.appendChild(go);
+ const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Back to equipment list';bk.onclick=()=>pmGo('list');w.appendChild(bk);
+}
+
+// ---------- saved DA Form 2404 history (last 10, kept on this phone in IndexedDB) ----------
+const PM_HMAX=10;
+function pmHdb(){return new Promise((ok,no)=>{try{const q=indexedDB.open('efr-2404',1);q.onupgradeneeded=()=>q.result.createObjectStore('forms',{keyPath:'id'});q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error);}catch(x){no(x);}});}
+async function pmHistAll(){try{const db=await pmHdb();return await new Promise((ok,no)=>{const r=db.transaction('forms').objectStore('forms').getAll();r.onsuccess=()=>ok((r.result||[]).sort((a,b)=>b.id-a.id));r.onerror=()=>no(r.error);});}catch(x){return [];}}
+async function pmHistPut(rec){const db=await pmHdb();await new Promise((ok,no)=>{const t=db.transaction('forms','readwrite');t.objectStore('forms').put(rec);t.oncomplete=ok;t.onerror=()=>no(t.error);});}
+async function pmHistDel(id){const db=await pmHdb();await new Promise((ok,no)=>{const t=db.transaction('forms','readwrite');t.objectStore('forms').delete(id);t.oncomplete=ok;t.onerror=()=>no(t.error);});}
+async function pmHistAdd(r){
+ try{
+  const rec={id:Date.now(),name:r.name,eq:r.eq.name,tm:r.eq.tm||'',date:(r.admin&&r.admin.date)||'',faults:r.faults,blank:!!r.blank,email:(r.admin&&r.admin.email)||'',bytes:new Uint8Array(r.bytes)};
+  await pmHistPut(rec);
+  const all=await pmHistAll();for(const old of all.slice(PM_HMAX))await pmHistDel(old.id);
+ }catch(x){console.warn('2404 history not saved',x);}
+}
+function pmHistFile(rec){const blob=new Blob([rec.bytes],{type:'application/pdf'});let file=null;try{file=new File([blob],rec.name,{type:'application/pdf'});}catch(x){}return {blob,file};}
+function pmHistDownload(rec){const {blob}=pmHistFile(rec);const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=rec.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);a.remove();},1500);}
+async function pmHistShare(rec){
+ const {file}=pmHistFile(rec);const subj='DA Form 2404 - '+rec.eq+' - '+rec.date;
+ const body='DA Form 2404 for '+rec.eq+(rec.tm?' ('+rec.tm+')':'')+' dated '+rec.date+' is attached. '+rec.faults+' '+(rec.blank?'line':'fault')+(rec.faults===1?'':'s')+' recorded.';
+ try{if(file&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:subj,text:body});return;}}catch(x){if(x&&x.name==='AbortError')return;}
+ pmHistDownload(rec);
+ setTimeout(()=>{location.href='mailto:'+encodeURIComponent(rec.email||'').replace(/%40/g,'@')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body+'\n\n(Attach the PDF you just downloaded: '+rec.name+')');},600);
+}
+async function pmHistShow(box){
+ const all=await pmHistAll();box.innerHTML='';if(!all.length)return;
+ const h=document.createElement('div');h.className='pm-h';h.textContent='Saved 2404s';box.appendChild(h);
+ const n=document.createElement('p');n.className='pm-note';n.textContent='The last '+PM_HMAX+' forms you made on this phone. Download or send one again without redoing the inspection.';box.appendChild(n);
+ all.forEach(rec=>{
+  const c=document.createElement('div');c.className='pm-hrow';
+  const d=rec.date&&rec.date.length===8?rec.date.slice(0,4)+'-'+rec.date.slice(4,6)+'-'+rec.date.slice(6):rec.date;
+  c.innerHTML=`<div class="hi"><b>${pmEsc(rec.eq)}</b><span>${pmEsc(d||'')} · ${rec.faults} ${rec.blank?'line':'fault'}${rec.faults===1?'':'s'}${rec.blank?' · blank form':''}</span></div><div class="ha"><button type="button" class="clbtn" data-a="dl">Download</button><button type="button" class="clbtn" data-a="sh">Send</button><button type="button" class="clbtn del" data-a="rm" aria-label="Delete saved form">Delete</button></div>`;
+  c.querySelector('[data-a="dl"]').onclick=()=>pmHistDownload(rec);
+  c.querySelector('[data-a="sh"]').onclick=()=>pmHistShare(rec);
+  c.querySelector('[data-a="rm"]').onclick=async()=>{if(!confirm('Delete the saved 2404 for '+rec.eq+' ('+(d||'')+') from this phone? This cannot be undone.'))return;await pmHistDel(rec.id);pmHistShow(box);};
+  box.appendChild(c);
+ });
+}
 
 // deep link (shareable), else resume where you left off
 (function(){
