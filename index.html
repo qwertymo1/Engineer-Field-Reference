@@ -382,6 +382,18 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pm-hrow .hi span{font-size:12.5px;color:var(--muted)}
 .pm-hrow .ha{display:flex;gap:6px}
 .pm-hrow .del{color:var(--warn)}
+.pm-caps{text-transform:uppercase}
+.pm-sig{margin-top:10px}
+.pm-sigwrap{position:relative;border:1.5px solid var(--line);border-radius:10px;background:#fff;overflow:hidden;touch-action:none}
+.pm-sigc{display:block;width:100%;touch-action:none;cursor:crosshair;position:relative;z-index:2}
+.pm-sigline{position:absolute;left:5%;right:5%;bottom:24%;border-bottom:1px dashed #9aa3b5;z-index:1}
+.pm-signame{position:absolute;left:5%;right:5%;bottom:5%;font:700 12px/1.2 system-ui,sans-serif;letter-spacing:.06em;color:#1d2433;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1}
+.pm-sigph{position:absolute;left:0;right:0;top:32%;text-align:center;color:#a0a7b4;font-size:14px;pointer-events:none;z-index:1}
+.pm-sigbar{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.pm-sigst{font-size:12px;font-weight:800;color:#a43a30}
+.pm-sigst.ok{color:#2f7a3a}
+:root[data-theme="night"] .pm-sigwrap{filter:invert(1) sepia(1) saturate(6) hue-rotate(-50deg) brightness(.55)}
+:root[data-theme="dark"] .pm-sigwrap{filter:brightness(.88)}
 
 :root{
  --bg:#ecebdf; --surface:#fbfaf3; --surface2:#f3f2e8; --fg:#22231a; --muted:#66654f;
@@ -622,7 +634,7 @@ body::before{background:var(--bar)}
 </div>
 <script>
 (function(){
- var V='00d9a523ca'; window.__BUILD__=V;
+ var V='b73ec582f9'; window.__BUILD__=V;
  // ?v= ties content.json + app.js to THIS page's build, so a cached old script can never
  // run under a new page (the SW strips ?v= for its offline copy, so offline still works)
  fetch('content.json?v='+V,{cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){

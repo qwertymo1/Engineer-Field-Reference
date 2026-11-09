@@ -1,4 +1,4 @@
-/* build 00d9a523ca */
+/* build b73ec582f9 */
 
 const DATA=window.__DATA__;
 const $=s=>document.querySelector(s), listEl=$('#list'), countEl=$('#count'), crumbEl=$('#crumb');
@@ -836,6 +836,53 @@ function pmReview(w){
  const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Back to checks';bk.onclick=()=>{pmView.idx=Math.max(0,st.length-1);pmGo('step');};w.appendChild(bk);
 }
 
+// ---------- signature (block 8a): printed name in block letters + finger/mouse signature ----------
+// Not a secure e-signature: it only identifies who did the PMCS. The drawn mark is kept with this form on this phone.
+const PM_SIGINK='#0a1a73';
+function pmBlockName(s){return pmAscii(s).toUpperCase().replace(/\s+/g,' ').trim();}
+function pmSigOk(a,w){
+ const miss=[];if(!pmBlockName(a.inspector))miss.push('printed name');if(!a.sig)miss.push('signature');
+ if(!miss.length)return true;
+ if(confirm('Block 8a has no '+miss.join(' or ')+'. Create the form anyway?'))return true;
+ const t=w.querySelector(miss[0]==='signature'?'.pm-sig':'input[data-k="inspector"]');if(t){t.scrollIntoView({block:'center'});if(t.focus&&t.tagName==='INPUT')t.focus();}
+ return false;
+}
+function pmSigPad(w,get,set){
+ const box=document.createElement('div');box.className='pm-form pm-sig';
+ box.innerHTML=`<label>8a. Signature — sign in the box with your finger</label>
+ <div class="pm-sigwrap"><canvas class="pm-sigc" aria-label="Signature box. Draw your signature here."></canvas><div class="pm-sigline"></div><div class="pm-signame"></div><div class="pm-sigph">Sign here</div></div>
+ <div class="pm-sigbar"><button type="button" class="pm-lk" data-a="clr">Clear signature</button><span class="pm-sigst"></span></div>`;
+ w.appendChild(box);
+ const c=box.querySelector('canvas'),wrap=box.querySelector('.pm-sigwrap'),ph=box.querySelector('.pm-sigph'),st=box.querySelector('.pm-sigst'),nm=box.querySelector('.pm-signame');
+ let strokes=[],cur=null,ctx=null,W=0,H=0;
+ const status=()=>{const has=!!get();ph.style.display=has||strokes.length?'none':'';st.textContent=has?'Signed':'Not signed';st.className='pm-sigst'+(has?' ok':'');};
+ const size=()=>{const r=wrap.getBoundingClientRect();W=Math.max(200,r.width);H=Math.round(W*0.32);const dpr=window.devicePixelRatio||1;c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);c.style.height=H+'px';ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);paint();};
+ const line=(pts)=>{if(!pts.length)return;ctx.beginPath();ctx.moveTo(pts[0][0]*W,pts[0][1]*H);if(pts.length===1){ctx.lineTo(pts[0][0]*W+0.1,pts[0][1]*H+0.1);}for(let i=1;i<pts.length-1;i++){const mx=(pts[i][0]+pts[i+1][0])/2*W,my=(pts[i][1]+pts[i+1][1])/2*H;ctx.quadraticCurveTo(pts[i][0]*W,pts[i][1]*H,mx,my);}if(pts.length>1){const l=pts[pts.length-1];ctx.lineTo(l[0]*W,l[1]*H);}ctx.stroke();};
+ const paint=()=>{if(!ctx)return;ctx.clearRect(0,0,W,H);ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=PM_SIGINK;ctx.lineWidth=Math.max(2,W/180);
+  if(!strokes.length&&get()){const im=new Image();im.onload=()=>{if(strokes.length)return;const sc=Math.min(W*0.94/im.width,H*0.8/im.height,1.6);const iw=im.width*sc,ih=im.height*sc;ctx.drawImage(im,(W-iw)/2,(H*0.82-ih)/2,iw,ih);};im.src=get();}
+  strokes.forEach(line);};
+ const pt=ev=>{const r=c.getBoundingClientRect();return [Math.min(1,Math.max(0,(ev.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(ev.clientY-r.top)/r.height))];};
+ const save=()=>{ // trim to the drawn area and keep a transparent PNG
+  if(!strokes.length){set('');status();return;}
+  let x0=1,y0=1,x1=0,y1=0;strokes.forEach(s=>s.forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}));
+  const S=3,pad=0.02;const ow=Math.max(40,Math.round((x1-x0+pad*2)*W*S)),oh=Math.max(20,Math.round((y1-y0+pad*2)*H*S));
+  const o=document.createElement('canvas');o.width=ow;o.height=oh;const g=o.getContext('2d');
+  g.lineCap='round';g.lineJoin='round';g.strokeStyle=PM_SIGINK;g.lineWidth=Math.max(2,W/180)*S;
+  const tx=([x,y])=>[(x-x0+pad)*W*S,(y-y0+pad)*H*S];
+  strokes.forEach(s=>{const p=s.map(tx);g.beginPath();g.moveTo(p[0][0],p[0][1]);if(p.length===1)g.lineTo(p[0][0]+0.1,p[0][1]+0.1);for(let i=1;i<p.length-1;i++){g.quadraticCurveTo(p[i][0],p[i][1],(p[i][0]+p[i+1][0])/2,(p[i][1]+p[i+1][1])/2);}if(p.length>1){const l=p[p.length-1];g.lineTo(l[0],l[1]);}g.stroke();});
+  set(o.toDataURL('image/png'));status();};
+ c.addEventListener('pointerdown',ev=>{ev.preventDefault();try{c.setPointerCapture(ev.pointerId);}catch(x){}
+  if(!strokes.length&&get()){set('');} // start over when signing again on top of a saved signature
+  cur=[pt(ev)];strokes.push(cur);ph.style.display='none';paint();});
+ c.addEventListener('pointermove',ev=>{if(!cur)return;ev.preventDefault();const p=pt(ev),l=cur[cur.length-1];if(Math.abs(p[0]-l[0])+Math.abs(p[1]-l[1])<0.003)return;cur.push(p);paint();});
+ const end=()=>{if(!cur)return;cur=null;save();};
+ c.addEventListener('pointerup',end);c.addEventListener('pointercancel',end);c.addEventListener('lostpointercapture',end);
+ box.querySelector('[data-a="clr"]').onclick=()=>{strokes=[];set('');paint();status();};
+ if(window.ResizeObserver){let lw=0;new ResizeObserver(()=>{const r=wrap.getBoundingClientRect();if(Math.abs(r.width-lw)>2){lw=r.width;size();}}).observe(wrap);}
+ requestAnimationFrame(size);status();
+ return {name:v=>{nm.textContent=pmBlockName(v);}};
+}
+
 // ---------- 5. admin data ----------
 function pmToday(){const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
 function pmTmDate(e){
@@ -863,15 +910,20 @@ function pmAdmin(w){
  <div class="g2">${fld('tm1','7. TM number','')}${fld('tmd1','TM date (YYYYMMDD)','','inputmode="numeric"')}</div>
  <div class="hint">TM date: ${e.date?'the manual prints “'+pmEsc(e.date)+'”':'not printed on the pages supplied'}; add the day if the TM cover gives it, or the date of your latest change.</div>
  <div class="g2">${fld('tm2','TM number (2nd, optional)','')}${fld('tmd2','TM date (2nd)','','inputmode="numeric"')}</div>
- ${fld('inspector','8a. Person performing inspection (printed name)','e.g. SPC SMITH, J.')}
- <div class="g2">${fld('time1','8b. Time (HHMM)','','inputmode="numeric"')}${fld('mh','10. Man-hours required','','inputmode="decimal"')}</div>
- ${fld('email','Email the form to (optional)','name@army.mil','type="email" inputmode="email" autocapitalize="none"')}
- <div class="hint">Signature boxes are left blank — print and sign, or sign in your maintenance system.</div>`;
+ ${fld('inspector','8a. Your printed name (block letters)','e.g. SPC SMITH, J.','class="pm-caps"')}
+ <div class="g2">${fld('time1','8b. Time (HHMM)','','inputmode="numeric"')}${fld('mh','10. Man-hours required','','inputmode="decimal"')}</div>`;
  w.appendChild(f);
- const read=()=>{f.querySelectorAll('input[data-k]').forEach(i=>{a[i.dataset.k]=i.value;});pmSess.admin=Object.assign({},a);delete pmSess.admin.org;delete pmSess.admin.inspector;delete pmSess.admin.email;pmSave();lsSet(PM_ADM,{org:a.org,inspector:a.inspector,email:a.email});};
- f.addEventListener('input',read);
+ const sig=pmSigPad(w,()=>a.sig||'',v=>{a.sig=v;pmSess.admin=Object.assign(pmSess.admin||{},{sig:v});pmSave();});
+ sig.name(a.inspector);
+ const f2=document.createElement('div');f2.className='pm-form';
+ f2.innerHTML=`<div class="hint">Your name and signature go in block 8a. This marks who did the PMCS; it is not a secure digital signature. Block 9a (maintenance supervisor) is left blank.</div>
+ ${fld('email','Email the form to (optional)','name@army.mil','type="email" inputmode="email" autocapitalize="none"')}`;
+ w.appendChild(f2);
+ const read=()=>{[f,f2].forEach(x=>x.querySelectorAll('input[data-k]').forEach(i=>{a[i.dataset.k]=i.value;}));sig.name(a.inspector);pmSess.admin=Object.assign({},a);delete pmSess.admin.org;delete pmSess.admin.inspector;delete pmSess.admin.email;pmSave();lsSet(PM_ADM,{org:a.org,inspector:a.inspector,email:a.email});};
+ f.addEventListener('input',read);f2.addEventListener('input',read);
  const go=document.createElement('button');go.className='pm-btn';go.textContent='Create DA Form 2404 ›';
- go.onclick=async()=>{read();go.disabled=true;go.textContent='Creating…';pmMsg='';
+ go.onclick=async()=>{read();
+  if(!pmSigOk(a,w))return;go.disabled=true;go.textContent='Creating…';pmMsg='';
   try{pmPdf=await pmBuildPdf(e,a);pmGo('done');}catch(err){go.disabled=false;go.textContent='Create DA Form 2404 ›';const m=document.createElement('div');m.className='pm-msg err';m.textContent='Could not create the PDF: '+(err&&err.message||err);w.appendChild(m);console.error(err);}};
  w.appendChild(go);
  const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent='‹ Back to review';bk.onclick=()=>pmGo('review');w.appendChild(bk);
@@ -938,7 +990,15 @@ async function pmBuildPdf(e,a){
  ['org','model','serial','miles','hours','rounds','hot','date','type','tm1','tmd1','tm2','tmd2'].forEach(k=>put(k,a[k]));
  // 8a printed name, 8b time, 10 manhours (inside taller boxes)
  const box=(k,val,size)=>{const r=PM_HDR[k];if(!r||!val)return;const t=pmAscii(val);let sz=size||9;const w=r[2]-r[0]-2;while(sz>5&&font.widthOfTextAtSize(t,sz)>w)sz-=.5;p1.drawText(t,{x:r[0]+1,y:r[1]+2,size:sz,font,color:ink});};
- box('inspector',a.inspector,8);box('time1',a.time1,9);box('mh',a.mh,9);
+ box('time1',a.time1,9);box('mh',a.mh,9);
+ // 8a: box runs x 35-222, y ~416-452 under its label. Signature in the upper part, printed name (block letters) along the bottom.
+ const nm=pmBlockName(a.inspector),S8={x0:38,x1:220,yb:416.5,yt:452.5};
+ if(nm){let sz=8;while(sz>5&&bold.widthOfTextAtSize(nm,sz)>S8.x1-S8.x0)sz-=.5;p1.drawText(nm,{x:S8.x0,y:S8.yb+1.5,size:sz,font:bold,color:ink});}
+ if(a.sig&&/^data:image\/png;base64,/.test(a.sig)){
+  try{const im=await doc.embedPng(a.sig);const top=S8.yt,bot=S8.yb+(nm?10:1),mw=S8.x1-S8.x0,mh=top-bot;
+   const sc=Math.min(mw/im.width,mh/im.height);const iw=im.width*sc,ih=im.height*sc;
+   p1.drawImage(im,{x:S8.x0+2,y:bot+(mh-ih)/2,width:iw,height:ih});}catch(x){console.warn('signature not added',x);}
+ }
  // rows
  const bounds=[PM_P1,PM_P2];
  rows.forEach((r,idx)=>{
@@ -964,7 +1024,7 @@ function pmDone(w){
  const r=pmPdf,e=r.eq;
  if(!r.saved){r.saved=true;pmHistAdd(r);}
  const d=document.createElement('div');d.className='pm-done';
- d.innerHTML=`<div class="big">✅</div><div class="pm-title">DA Form 2404 is ready</div><p class="pm-note">${pmEsc(e.name)} · ${r.faults} ${r.blank?'line':'fault'}${r.faults===1?'':'s'} · ${r.pages} page${r.pages===1?'':'s'}</p>`;
+ d.innerHTML=`<div class="big">✅</div><div class="pm-title">DA Form 2404 is ready</div><p class="pm-note">${r.admin&&r.admin.sig?'Signed by '+pmEsc(pmBlockName(r.admin.inspector)||'—')+' · ':'<b>Unsigned</b> · '}${pmEsc(e.name)} · ${r.faults} ${r.blank?'line':'fault'}${r.faults===1?'':'s'} · ${r.pages} page${r.pages===1?'':'s'}</p>`;
  w.appendChild(d);
  const blob=new Blob([r.bytes],{type:'application/pdf'});
  const file=(()=>{try{return new File([blob],r.name,{type:'application/pdf'});}catch(x){return null;}})();
@@ -990,7 +1050,7 @@ function pmDone(w){
  const open=document.createElement('button');open.className='pm-btn sec';open.textContent='Open / preview PDF';open.onclick=()=>{const u=URL.createObjectURL(blob);window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);};w.appendChild(open);
  const bk=document.createElement('button');bk.className='pm-btn sec';bk.textContent=r.blank?'‹ Edit the form':'‹ Edit equipment data';bk.onclick=()=>pmGo(r.blank?'blank':'admin');w.appendChild(bk);
  const fin=document.createElement('button');fin.className='pm-btn sec';fin.textContent=r.blank?'Finished — clear this form':'Finished — clear this inspection';fin.onclick=()=>{if(!confirm(r.blank?'Clear this form from the app? Make sure you saved or sent the PDF first.':'Clear this inspection from the app? Make sure you saved or sent the PDF first.'))return;if(r.blank){const g=lsGet(PM_BLANK,{});lsSet(PM_BLANK,{org:g.org,inspector:g.inspector,email:g.email});}else{const a=pmAll();delete a[e.id];lsSet(PM_SESS,a);pmSess=null;}pmPdf=null;pmGo('list');};w.appendChild(fin);
- const nt=document.createElement('p');nt.className='pm-note';nt.textContent='The form is filled from your entries and is unsigned. Faults go to your supervisor / maintenance chain per local SOP; this app does not submit anything.';w.appendChild(nt);
+ const nt=document.createElement('p');nt.className='pm-note';nt.textContent=(r.admin&&r.admin.sig?'Block 8a carries the name and signature you entered (an identifying mark, not a secure digital signature). ':'This form is not signed — go back to the form screen to sign block 8a. ')+'Faults go to your supervisor / maintenance chain per local SOP; this app does not submit anything.';w.appendChild(nt);
 }
 function pmNote(t,ok){const m=document.getElementById('pmmsg');pmMsg=`<div class="pm-msg${ok?' ok':' err'}">${pmEsc(t)}</div>`;if(m)m.innerHTML=pmMsg;}
 
@@ -1013,10 +1073,11 @@ function pmBlank(w){
  <div class="g2">${fld('date','5. Date (YYYYMMDD)','','inputmode="numeric"')}${fld('type','6. Type inspection','e.g. BEFORE')}</div>
  <div class="g2">${fld('tm1','7. TM number','')}${fld('tmd1','TM date (YYYYMMDD)','','inputmode="numeric"')}</div>
  <div class="g2">${fld('tm2','TM number (2nd, optional)','')}${fld('tmd2','TM date (2nd)','','inputmode="numeric"')}</div>
- ${fld('inspector','8a. Person performing inspection (printed name)','e.g. SPC SMITH, J.')}
+ ${fld('inspector','8a. Your printed name (block letters)','e.g. SPC SMITH, J.','class="pm-caps"')}
  <div class="g2">${fld('time1','8b. Time (HHMM)','','inputmode="numeric"')}${fld('mh','10. Man-hours required','','inputmode="decimal"')}</div>`;
  w.appendChild(f);
- f.addEventListener('input',ev=>{const i=ev.target;if(i.dataset.k){d[i.dataset.k]=i.value;save();}});
+ let sig=null;
+ f.addEventListener('input',ev=>{const i=ev.target;if(i.dataset.k){d[i.dataset.k]=i.value;save();if(i.dataset.k==='inspector'&&sig)sig.name(d.inspector);}});
  const h2=document.createElement('div');h2.className='pm-h';h2.textContent='Deficiencies and shortcomings';w.appendChild(h2);
  const key=document.createElement('p');key.className='pm-note';key.textContent='Status symbols: '+PM_SYMS.map(x=>x.g+' '+x.n).join(', ')+'. Tap a symbol for what it means.';w.appendChild(key);
  const list=document.createElement('div');list.className='pm-brows';w.appendChild(list);
@@ -1037,10 +1098,13 @@ function pmBlank(w){
  };
  draw();
  const add=document.createElement('button');add.className='pm-btn sec';add.textContent='+ Add a line';add.onclick=()=>{d.rows.push({id:'',sym:'',def:'',corr:''});save();draw();const l=list.lastElementChild;if(l){l.scrollIntoView({block:'center'});const q=l.querySelector('input');if(q)q.focus();}};w.appendChild(add);
- const ef=document.createElement('div');ef.className='pm-form';ef.innerHTML=`<div><label for="pb_email">Email the form to (optional)</label><input id="pb_email" data-k="email" value="${pmEsc(d.email)}" placeholder="name@army.mil" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div><div class="hint">Signature boxes are left blank — print and sign, or sign in your maintenance system.</div>`;
+ const ef=document.createElement('div');ef.className='pm-form';ef.innerHTML=`<div><label for="pb_email">Email the form to (optional)</label><input id="pb_email" data-k="email" value="${pmEsc(d.email)}" placeholder="name@army.mil" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div><div class="hint">Your name and signature go in block 8a. This marks who did the PMCS; it is not a secure digital signature. Block 9a (maintenance supervisor) is left blank.</div>`;
+ sig=pmSigPad(w,()=>d.sig||'',v=>{d.sig=v;save();});sig.name(d.inspector);
  ef.addEventListener('input',ev=>{d.email=ev.target.value;save();});w.appendChild(ef);
  const go=document.createElement('button');go.className='pm-btn';go.textContent='Create DA Form 2404 ›';
- go.onclick=async()=>{go.disabled=true;go.textContent='Creating…';
+ go.onclick=async()=>{
+  if(!pmSigOk(d,w))return;
+  go.disabled=true;go.textContent='Creating…';
   const a=Object.assign({},d,{__rows:d.rows});
   const e={id:'blank',name:d.model||'Equipment',tm:d.tm1||''};
   try{pmPdf=await pmBuildPdf(e,a);pmView.blank=true;pmGo('done');}catch(err){go.disabled=false;go.textContent='Create DA Form 2404 ›';const m=document.createElement('div');m.className='pm-msg err';m.textContent='Could not create the PDF: '+(err&&err.message||err);w.appendChild(m);console.error(err);}};
